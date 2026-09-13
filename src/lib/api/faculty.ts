@@ -1,0 +1,6 @@
+import { prisma } from '@/lib/prisma';
+
+export const getFacultyClassRoster = (facultyId: string) => prisma.student.findMany({ where: { enrollments: { some: { course: { facultyId } } } }, include: { digitalTwin: true, riskAssessments: { orderBy: { createdAt: 'desc' }, take: 1 } }, orderBy: { fullName: 'asc' } });
+export const getFacultyClassInsights = (facultyId: string) => prisma.classInsight.findMany({ where: { facultyId }, include: { course: true }, orderBy: { createdAt: 'desc' } });
+export const getFacultyAtRiskStudents = (facultyId: string) => prisma.student.findMany({ where: { enrollments: { some: { course: { facultyId } } }, riskAssessments: { some: { riskLevel: { in: ['HIGH', 'CRITICAL'] } } } }, include: { riskAssessments: { orderBy: { createdAt: 'desc' }, take: 1 } } });
+export const getClassKnowledgeHeatmap = (courseId: string) => prisma.conceptMastery.findMany({ where: { concept: { courseId } }, include: { concept: true, student: { select: { id: true, fullName: true, rollNumber: true } } } });

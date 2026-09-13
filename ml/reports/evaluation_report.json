@@ -1,0 +1,21 @@
+{
+  "learning_analysis": {
+    "model": "XGBoost Regressor",
+    "mae": null,
+    "rmse": null,
+    "r2": null
+  },
+  "attendance_risk": {
+    "model": "XGBoost Classifier",
+    "accuracy": null,
+    "precision": null,
+    "recall": null,
+    "f1": null,
+    "auc": null
+  },
+  "knowledge_gap": {
+    "method": "Prerequisite graph traversal + mastery rules",
+    "coverage": null
+  },
+  "status": "Sample report. Run train_learning_analysis.py, train_attendance_risk.py, and evaluate.py to populate metrics."
+}

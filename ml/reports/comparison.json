@@ -1,0 +1,13 @@
+{
+  "metric": [
+    "Early detection (weeks ahead)",
+    "Precision of alerts",
+    "Recall of at-risk students",
+    "False positive rate",
+    "Personalization depth",
+    "Intervention usefulness score"
+  ],
+  "traditional": [0, 0.45, 0.52, 0.55, "Low", 2.8],
+  "ai_twin": [3.2, 0.82, 0.79, 0.18, "High", 4.4],
+  "status": "Reference comparison. Replace AI Twin values with measured evaluation and survey results."
+}

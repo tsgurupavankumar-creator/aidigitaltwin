@@ -1,0 +1,62 @@
+{
+  "name": "academic-digital-twin",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:seed": "prisma db seed",
+    "db:studio": "prisma studio",
+    "report:comparison": "tsx scripts/generate-comparison-report.ts",
+    "test": "tsx --test \"tests/*.test.ts\"",
+    "passwords:rotate-defaults": "tsx scripts/rotate-default-passwords.ts",
+    "twin:weekly-review": "tsx scripts/weekly-review.ts",
+    "quizzes:fix-seeded": "tsx scripts/fix-seeded-quizzes.ts",
+    "eval:knowledge-gap": "tsx scripts/evaluate-knowledge-gap.ts",
+    "ml:export": "tsx scripts/export-training-data.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "bcryptjs": "^2.4.3",
+    "clsx": "^2.1.1",
+    "framer-motion": "^11.0.8",
+    "jose": "^5.9.6",
+    "lucide-react": "^0.350.0",
+    "next": "15.5.27",
+    "nodemailer": "10.0.13",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "recharts": "^2.12.2",
+    "tailwind-merge": "^2.6.1",
+    "tailwindcss-animate": "^1.0.7",
+    "zod": "^3.25.76",
+    "zustand": "^4.5.2"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^20.11.24",
+    "@types/nodemailer": "8.0.2",
+    "@types/react": "^18.2.61",
+    "@types/react-dom": "^18.2.19",
+    "autoprefixer": "^10.4.18",
+    "postcss": "8.5.28",
+    "prisma": "^5.22.0",
+    "tailwindcss": "^3.4.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.3.3"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "overrides": {
+    "postcss": "8.5.28"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

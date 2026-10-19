@@ -1,0 +1,751 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  STUDENT
+  FACULTY
+  ADMIN
+}
+
+enum AccountStatus {
+  ACTIVE
+  SUSPENDED
+  PENDING
+  DELETED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+}
+
+enum SubmissionStatus {
+  DRAFT
+  SUBMITTED
+  LATE
+  GRADED
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum AgentType {
+  ATTENDANCE
+  QUIZ
+  ASSIGNMENT
+  CONCEPT_MASTERY
+  RISK_ASSESSMENT
+  RECOMMENDATION
+  STUDY_PLAN
+}
+
+enum AgentStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum AlertType {
+  ATTENDANCE
+  QUIZ
+  ASSIGNMENT
+  RISK
+  RECOMMENDATION
+  SYSTEM
+}
+
+enum AlertSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum QuestionType {
+  MCQ
+  TRUE_FALSE
+  SHORT_ANSWER
+}
+
+enum Trend {
+  UP
+  DOWN
+  STABLE
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum ActionType {
+  STUDY
+  REVIEW
+  PRACTICE
+  TUTORING
+}
+
+enum InterventionType {
+  TUTORING
+  COUNSELING
+  QUIZ
+  MEETING
+}
+
+enum NotificationType {
+  INFO
+  ALERT
+  ASSIGNMENT
+  QUIZ
+  RECOMMENDATION
+  SYSTEM
+}
+
+enum AttachmentType {
+  ASSIGNMENT
+  QUIZ
+  LECTURE
+  SUBMISSION
+  PROFILE
+}
+
+enum VerificationType {
+  EMAIL
+  PASSWORD_RESET
+}
+
+enum RelationshipType {
+  PREREQUISITE
+  RELATED
+  EXTENDS
+}
+
+model User {
+  id                  String              @id @default(cuid())
+  email               String              @unique
+  passwordHash        String
+  role                UserRole
+  status              AccountStatus       @default(ACTIVE)
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  student             Student?
+  faculty             Faculty?
+  sessions            Session[]
+  auditLogs           AuditLog[]
+  emailVerifications  EmailVerification[]
+  passwordResets      PasswordReset[]
+  refreshTokens       RefreshToken[]
+  notifications       Notification[]
+  uploadedAttachments Attachment[]
+
+  @@index([email])
+  @@index([role, status])
+  @@index([createdAt])
+  @@map("users")
+}
+
+model Session {
+  id         String   @id @default(cuid())
+  tokenHash  String   @unique
+  userId     String
+  expiresAt  DateTime @default(now())
+  deviceInfo String?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  event     String
+  ipAddress String?
+  userAgent String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model Student {
+  id              String           @id @default(cuid())
+  userId          String           @unique
+  rollNumber      String           @unique
+  fullName        String
+  dob             DateTime         @default(now())
+  department      String
+  year            Int
+  semester        Int
+  section         String
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  enrollments     Enrollment[]
+  attendance      Attendance[]
+  submissions     Submission[]
+  quizAttempts    QuizAttempt[]
+  conceptMastery  ConceptMastery[]
+  riskAssessments RiskAssessment[]
+  digitalTwin     DigitalTwin?
+  engagementLogs  EngagementLog[]
+  studyPlans      StudyPlan[]
+  recommendations Recommendation[]
+  alerts          Alert[]
+  interventions   Intervention[]
+  agentLogs       AgentLog[]
+
+  @@index([rollNumber])
+  @@index([department, semester])
+  @@index([department, year, section])
+  @@map("students")
+}
+
+model Faculty {
+  id            String         @id @default(cuid())
+  userId        String         @unique
+  facultyId     String         @unique
+  fullName      String
+  department    String
+  designation   String
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  classInsights ClassInsight[]
+  interventions Intervention[]
+  courses       Course[]
+
+  @@index([facultyId])
+  @@index([department])
+  @@map("faculty")
+}
+
+model Course {
+  id            String         @id @default(cuid())
+  code          String         @unique
+  name          String
+  credits       Int
+  semester      Int
+  department    String
+  facultyId     String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  faculty       Faculty?       @relation(fields: [facultyId], references: [id], onDelete: SetNull)
+  enrollments   Enrollment[]
+  lectures      Lecture[]
+  topics        Topic[]
+  concepts      Concept[]
+  assignments   Assignment[]
+  quizzes       Quiz[]
+  classInsights ClassInsight[]
+
+  @@index([facultyId])
+  @@index([semester, department])
+  @@map("courses")
+}
+
+model Enrollment {
+  id         String   @id @default(cuid())
+  studentId  String
+  courseId   String
+  enrolledAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  student    Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  course     Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, courseId])
+  @@index([studentId, courseId])
+  @@map("enrollments")
+}
+
+model Lecture {
+  id          String       @id @default(cuid())
+  courseId    String
+  date        DateTime     @default(now())
+  time        String
+  room        String
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  course      Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  attendance  Attendance[]
+  attachments Attachment[]
+
+  @@index([courseId, date])
+  @@map("lectures")
+}
+
+model Topic {
+  id         String    @id @default(cuid())
+  courseId   String
+  parentId   String?
+  name       String
+  orderIndex Int
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  course     Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  parent     Topic?    @relation("TopicTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children   Topic[]   @relation("TopicTree")
+  concepts   Concept[]
+
+  @@unique([courseId, name])
+  @@index([courseId, parentId])
+  @@map("topics")
+}
+
+model Concept {
+  id             String           @id @default(cuid())
+  courseId       String
+  parentTopicId  String?
+  name           String
+  difficulty     Int
+  orderIndex     Int
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  course         Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  parentTopic    Topic?           @relation(fields: [parentTopicId], references: [id], onDelete: SetNull)
+  prerequisites  ConceptEdge[]    @relation("prerequisite")
+  dependents     ConceptEdge[]    @relation("dependent")
+  questions      Question[]
+  masteryRecords ConceptMastery[]
+  studyTasks     StudyTask[]
+
+  @@unique([courseId, name])
+  @@index([courseId, parentTopicId])
+  @@map("concepts")
+}
+
+model ConceptEdge {
+  id             String           @id @default(cuid())
+  prerequisiteId String
+  dependentId    String
+  relationship   RelationshipType @default(PREREQUISITE)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  prerequisite   Concept          @relation("prerequisite", fields: [prerequisiteId], references: [id], onDelete: Cascade)
+  dependent      Concept          @relation("dependent", fields: [dependentId], references: [id], onDelete: Cascade)
+
+  @@unique([prerequisiteId, dependentId])
+  @@index([prerequisiteId, relationship])
+  @@index([dependentId, relationship])
+  @@map("concept_edges")
+}
+
+model Attendance {
+  id        String           @id @default(cuid())
+  studentId String
+  lectureId String
+  status    AttendanceStatus
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  student   Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  lecture   Lecture          @relation(fields: [lectureId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, lectureId])
+  @@index([studentId, lectureId])
+  @@map("attendances")
+}
+
+model Assignment {
+  id          String       @id @default(cuid())
+  courseId    String
+  title       String
+  description String?
+  maxMarks    Float
+  dueDate     DateTime     @default(now())
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  course      Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  submissions Submission[]
+  questions   Question[]
+  attachments Attachment[]
+
+  @@index([courseId, dueDate])
+  @@map("assignments")
+}
+
+model Submission {
+  id            String           @id @default(cuid())
+  studentId     String
+  assignmentId  String
+  status        SubmissionStatus @default(DRAFT)
+  marksObtained Float?
+  aiFeedback    String?
+  submittedAt   DateTime?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  student       Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  assignment    Assignment       @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  attachments   Attachment[]
+
+  @@unique([studentId, assignmentId])
+  @@index([studentId, status])
+  @@index([assignmentId, status])
+  @@map("submissions")
+}
+
+model Quiz {
+  id            String        @id @default(cuid())
+  courseId      String
+  title         String
+  description   String?
+  isAIGenerated Boolean       @default(false)
+  durationMins  Int
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  course        Course        @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  questions     Question[]
+  attempts      QuizAttempt[]
+  attachments   Attachment[]
+
+  @@index([courseId, createdAt])
+  @@map("quizzes")
+}
+
+model QuizAttempt {
+  id         String         @id @default(cuid())
+  studentId  String
+  quizId     String
+  score      Float
+  percentage Float
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  student    Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  quiz       Quiz           @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  responses  QuizResponse[]
+
+  @@index([studentId, createdAt])
+  @@index([quizId, createdAt])
+  @@map("quiz_attempts")
+}
+
+model Question {
+  id            String         @id @default(cuid())
+  quizId        String?
+  assignmentId  String?
+  conceptId     String
+  type          QuestionType
+  difficulty    Int
+  options       Json?
+  correctAnswer String
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  quiz          Quiz?          @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  assignment    Assignment?    @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  concept       Concept        @relation(fields: [conceptId], references: [id], onDelete: Cascade)
+  responses     QuizResponse[]
+
+  @@index([quizId, conceptId])
+  @@index([assignmentId, conceptId])
+  @@map("questions")
+}
+
+model QuizResponse {
+  id            String      @id @default(cuid())
+  attemptId     String
+  questionId    String
+  studentAnswer String
+  isCorrect     Boolean
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  attempt       QuizAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question      Question    @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([attemptId, questionId])
+  @@index([attemptId, questionId])
+  @@map("quiz_responses")
+}
+
+model ConceptMastery {
+  id              String   @id @default(cuid())
+  studentId       String
+  conceptId       String
+  masteryScore    Float
+  previousScore   Float?
+  trend           Trend
+  confidenceLevel Float
+  assessmentCount Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  student         Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  concept         Concept  @relation(fields: [conceptId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, conceptId])
+  @@index([studentId, masteryScore])
+  @@index([conceptId, masteryScore])
+  @@map("concept_mastery")
+}
+
+model RiskAssessment {
+  id              String    @id @default(cuid())
+  studentId       String
+  riskLevel       RiskLevel
+  riskScore       Float
+  predictedGPA    Float?
+  confidenceScore Float
+  factors         Json
+  explanation     Json
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  student         Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId, createdAt])
+  @@index([riskLevel, createdAt])
+  @@map("risk_assessments")
+}
+
+model DigitalTwin {
+  id               String   @id @default(cuid())
+  studentId        String   @unique
+  academicHealth   Float
+  performanceScore Float
+  attendanceScore  Float
+  engagementScore  Float
+  knowledgeScore   Float
+  learningVelocity Float
+  behaviorScore    Float
+  skillsScore      Float
+  lastSyncedAt     DateTime @default(now())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  student          Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId, lastSyncedAt])
+  @@map("digital_twins")
+}
+
+model AgentLog {
+  id              String      @id @default(cuid())
+  studentId       String?
+  agentType       AgentType
+  status          AgentStatus
+  input           Json
+  output          Json?
+  confidence      Float?
+  triggeredBy     String?
+  executionTimeMs Int?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  student         Student?    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId, createdAt])
+  @@index([agentType, status, createdAt])
+  @@map("agent_logs")
+}
+
+model EngagementLog {
+  id             String   @id @default(cuid())
+  studentId      String
+  date           DateTime @default(now())
+  dailyStudyTime Int
+  logins         Int
+  focusScore     Float
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  student        Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, date])
+  @@index([studentId, date])
+  @@map("engagement_logs")
+}
+
+model StudyPlan {
+  id        String      @id @default(cuid())
+  studentId String
+  title     String
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  student   Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  tasks     StudyTask[]
+
+  @@index([studentId, createdAt])
+  @@map("study_plans")
+}
+
+model StudyTask {
+  id            String    @id @default(cuid())
+  studyPlanId   String
+  conceptId     String
+  priority      Priority
+  estimatedMins Int
+  completed     Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  studyPlan     StudyPlan @relation(fields: [studyPlanId], references: [id], onDelete: Cascade)
+  concept       Concept   @relation(fields: [conceptId], references: [id], onDelete: Cascade)
+
+  @@index([studyPlanId, completed])
+  @@index([conceptId, priority])
+  @@map("study_tasks")
+}
+
+model Recommendation {
+  id         String     @id @default(cuid())
+  studentId  String
+  agentType  AgentType
+  title      String
+  actionType ActionType
+  confidence Float
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  student    Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId, createdAt])
+  @@index([agentType, confidence])
+  @@map("recommendations")
+}
+
+model Alert {
+  id        String        @id @default(cuid())
+  studentId String
+  type      AlertType
+  severity  AlertSeverity
+  message   String
+  isRead    Boolean       @default(false)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  student   Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId, createdAt])
+  @@index([severity, createdAt])
+  @@map("alerts")
+}
+
+model ClassInsight {
+  id          String   @id @default(cuid())
+  facultyId   String
+  courseId    String
+  insightType String
+  data        Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  faculty     Faculty  @relation(fields: [facultyId], references: [id], onDelete: Cascade)
+  course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@index([facultyId, createdAt])
+  @@index([courseId, createdAt])
+  @@map("class_insights")
+}
+
+model Intervention {
+  id          String           @id @default(cuid())
+  facultyId   String
+  studentId   String
+  type        InterventionType
+  notes       String
+  outcome     String?
+  scheduledAt DateTime?
+  completedAt DateTime?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  faculty     Faculty          @relation(fields: [facultyId], references: [id], onDelete: Cascade)
+  student     Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([facultyId, createdAt])
+  @@index([studentId, createdAt])
+  @@map("interventions")
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  title     String
+  body      String
+  link      String?
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead, createdAt])
+  @@map("notifications")
+}
+
+model Attachment {
+  id         String         @id @default(cuid())
+  uploaderId String
+  entityType AttachmentType
+  entityId   String
+  fileName   String
+  fileUrl    String
+  fileSize   Int
+  mimeType   String
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  uploader   User           @relation(fields: [uploaderId], references: [id], onDelete: Cascade)
+  lecture    Lecture?       @relation(fields: [entityId], references: [id], onDelete: Cascade, map: "attachment_lecture_fk")
+  assignment Assignment?    @relation(fields: [entityId], references: [id], onDelete: Cascade, map: "attachment_assignment_fk")
+  quiz       Quiz?          @relation(fields: [entityId], references: [id], onDelete: Cascade, map: "attachment_quiz_fk")
+  submission Submission?    @relation(fields: [entityId], references: [id], onDelete: Cascade, map: "attachment_submission_fk")
+
+  @@index([uploaderId, createdAt])
+  @@index([entityType, entityId])
+  @@map("attachments")
+}
+
+model EmailVerification {
+  id         String           @id @default(cuid())
+  userId     String
+  token      String           @unique
+  type       VerificationType @default(EMAIL)
+  expiresAt  DateTime         @default(now())
+  verifiedAt DateTime?
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@map("email_verifications")
+}
+
+model PasswordReset {
+  id        String    @id @default(cuid())
+  userId    String
+  token     String    @unique
+  expiresAt DateTime  @default(now())
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@map("password_resets")
+}
+
+model RefreshToken {
+  id         String    @id @default(cuid())
+  userId     String
+  tokenHash  String    @unique
+  expiresAt  DateTime  @default(now())
+  deviceInfo String?
+  ipAddress  String?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt, revokedAt])
+  @@map("refresh_tokens")
+}

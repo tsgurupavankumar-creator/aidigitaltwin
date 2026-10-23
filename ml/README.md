@@ -1,3 +1,5 @@
+**Python:** 3.12, 3.13 or 3.14. Windows: `py -m venv .venv`, `.venv\Scripts\activate`, `python -m pip install -r requirements.txt`, then `python -m uvicorn server:app --port 8000`. macOS/Linux: `python3 -m venv .venv`, `source .venv/bin/activate`.
+
 # Academic Digital Twin ML Pipeline
 
 This directory contains the OULAD training pipeline and the separate FastAPI prediction service used by the Next.js agents.
@@ -31,6 +33,7 @@ python train_attendance_risk.py
 python calibrate_risk_score.py     # tests and sets the app's combined risk score
 python evaluate.py                 # report + model cards
 python upper_bound_experiment.py   # optional, research only: value of richer data
+python compare_ai_vs_traditional.py  # AI vs the app's traditional-dashboard rules on real outcomes
 ```
 
 `python per_type_results.py` recomputes the per-assessment-type results from the saved model without retraining.

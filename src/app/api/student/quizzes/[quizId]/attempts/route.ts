@@ -1,33 +1,84 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { requireRole } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
-import { requireUser } from '@/lib/twin/access';
-import { checkRateLimit } from '@/lib/auth/rate-limit';
-import { handle } from '@/lib/twin/http';
-import { recordQuizAttempt } from '@/lib/twin/records';
+import { applyMastery, observedByConcept } from '@/lib/twin/mastery';
 import { scheduleTwinSync } from '@/lib/twin/sync';
 
-type Ctx = { params: Promise<{ quizId: string }> };
+interface RouteContext {
+  params: Promise<{ quizId: string }>;
+}
 
-const bodySchema = z.object({ answers: z.record(z.string().max(64), z.string().max(2000)) });
+const bodySchema = z.object({
+  answers: z.record(z.string(), z.string().max(4000)),
+}).strict();
 
-/** Grades the attempt on the server, stores it, updates concept mastery and queues the twin update. */
-export async function POST(req: NextRequest, ctx: Ctx) {
-  return handle('QUIZ_ATTEMPT_POST', async () => {
-    const { quizId } = await ctx.params;
-    const auth = await requireUser('student');
-    if (!auth.ok) return auth.error;
-    const studentId = auth.user.student?.id;
-    if (!studentId) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    const limit = checkRateLimit(`quiz-attempt:${studentId}`, { max: 20, windowMs: 60 * 60 * 1000 });
-    if (!limit.allowed) return NextResponse.json({ error: 'Too many attempts; try again later.', retryAfterMs: limit.retryAfterMs }, { status: 429 });
-    const { answers } = bodySchema.parse(await req.json());
-    const result = await prisma.$transaction((tx) => recordQuizAttempt(tx, studentId, quizId, answers));
-    const twinUpdatesQueued = scheduleTwinSync(result.tasks);
-    return NextResponse.json({
-      attemptId: result.attemptId, score: result.score, total: result.total, percentage: result.percentage,
-      results: result.graded.map((g) => ({ questionId: g.questionId, isCorrect: g.isCorrect, correctAnswer: g.correctAnswer })),
-      twinUpdatesQueued,
-    }, { status: 201 });
-  });
+function normalizeAnswer(value: string) {
+  return value.trim().replace(/\s+/g, ' ').toLocaleLowerCase();
+}
+
+export async function POST(req: NextRequest, context: RouteContext) {
+  const auth = await requireRole('student');
+  if ('error' in auth) return auth.error;
+  const studentId = auth.user.student?.id;
+  if (!studentId) return NextResponse.json({ error: 'Student profile not found.' }, { status: 403 });
+
+  try {
+    const input = bodySchema.parse(await req.json());
+    const { quizId } = await context.params;
+    const quiz = await prisma.quiz.findUnique({
+      where: { id: quizId },
+      include: { course: true, questions: true },
+    });
+    if (!quiz) return NextResponse.json({ error: 'Quiz not found.' }, { status: 404 });
+
+    const enrollment = await prisma.enrollment.findUnique({
+      where: { studentId_courseId: { studentId, courseId: quiz.courseId } },
+      select: { id: true },
+    });
+    if (!enrollment) return NextResponse.json({ error: 'Quiz not found.' }, { status: 404 });
+    if (!quiz.questions.length) return NextResponse.json({ error: 'This quiz has no questions.' }, { status: 400 });
+    if (Object.keys(input.answers).some((questionId) => !quiz.questions.some((question) => question.id === questionId))) {
+      return NextResponse.json({ error: 'Answers contain a question that is not part of this quiz.' }, { status: 400 });
+    }
+
+    const graded = quiz.questions.map((question) => ({
+      questionId: question.id,
+      conceptId: question.conceptId,
+      studentAnswer: input.answers[question.id] ?? '',
+      isCorrect: normalizeAnswer(input.answers[question.id] ?? '') === normalizeAnswer(question.correctAnswer),
+    }));
+    const score = graded.filter((answer) => answer.isCorrect).length;
+    const total = quiz.questions.length;
+    const percentage = (100 * score) / total;
+
+    await prisma.$transaction(async (tx) => {
+      const attempt = await tx.quizAttempt.create({
+        data: { studentId, quizId, score, percentage },
+        select: { id: true },
+      });
+      await tx.quizResponse.createMany({
+        data: graded.map((answer) => ({
+          attemptId: attempt.id,
+          questionId: answer.questionId,
+          studentAnswer: answer.studentAnswer,
+          isCorrect: answer.isCorrect,
+        })),
+      });
+      await applyMastery(tx, studentId, observedByConcept(graded));
+    });
+
+    const twinUpdatesQueued = scheduleTwinSync([{
+      studentId,
+      event: 'quiz_attempted',
+      sourceKey: `quiz:${quizId}:${Date.now()}`,
+    }]);
+    return NextResponse.json({ score, total, percentage, twinUpdatesQueued }, { status: 201 });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ error: error.issues[0]?.message || 'Invalid answers.' }, { status: 400 });
+    }
+    console.error('[STUDENT_QUIZ_ATTEMPT_ERROR]', error);
+    return NextResponse.json({ error: 'Unable to submit quiz.' }, { status: 500 });
+  }
 }

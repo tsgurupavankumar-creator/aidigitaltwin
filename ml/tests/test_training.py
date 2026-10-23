@@ -111,7 +111,8 @@ class EndToEnd(unittest.TestCase):
         cls.env = dict(os.environ, ML_REPEATS='3', ML_TUNE='0', OULAD_DIR=str(root / 'data'), ML_MODELS_DIR=str(root / 'models'),
                        ML_REPORTS_DIR=str(root / 'reports'))
         cls.env['ML_UPPER_REPEATS'] = '1'
-        for script in ('train_learning_analysis.py', 'train_attendance_risk.py', 'calibrate_risk_score.py', 'evaluate.py', 'upper_bound_experiment.py'):
+        for script in ('train_learning_analysis.py', 'train_attendance_risk.py', 'calibrate_risk_score.py', 'evaluate.py',
+                       'upper_bound_experiment.py', 'compare_ai_vs_traditional.py'):
             subprocess.run([sys.executable, script], cwd=ML, env=cls.env, check=True, capture_output=True, text=True)
         cls.models, cls.reports = root / 'models', root / 'reports'
 
@@ -139,6 +140,16 @@ class EndToEnd(unittest.TestCase):
         by_type = report['learning_analysis']['by_assessment_type']
         self.assertIn('coursework', by_type)
         self.assertEqual(by_type['all']['n'], sum(by_type[t]['n'] for t in ('CMA', 'TMA', 'Exam') if t in by_type))
+
+    def test_ai_vs_traditional_on_real_outcomes(self):
+        import json
+        r = json.loads((self.reports / 'ai_vs_traditional.json').read_text())
+        for k in ('traditional_dashboard', 'ai_early_warning_model', 'ai_risk_level_high_or_critical'):
+            v = r[k]
+            self.assertEqual(v['tp'] + v['fp'] + v['fn'] + v['tn'], r['test']['students'])
+        self.assertTrue(r['test']['matches_saved_test_predictions'])
+        self.assertEqual([w['week'] for w in r['by_week']], [4, 6, 8, 10, 12])
+        self.assertIn('ai_vs_traditional', json.loads((self.reports / 'evaluation_report.json').read_text()))
 
     def test_upper_bound_is_research_only(self):
         import json

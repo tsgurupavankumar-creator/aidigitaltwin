@@ -436,7 +436,7 @@ export async function orchestrate(studentId: string, event: StudentEvent, option
       },
     });
     return result;
-  });
+  }, { timeout: 20000 });
   const orchestrationResult: OrchestrationResult = transactionResult;
 
   // Class insights are a secondary projection. Refresh after the core writes

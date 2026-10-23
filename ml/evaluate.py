@@ -96,6 +96,19 @@ def main():
                           'note': 'rule-based; not evaluated (OULAD has no concept data)'},
         'generated_at': datetime.now(timezone.utc).isoformat(),
     }
+    # Keep results written by the other scripts (they also save their own files), so re-running
+    # evaluate.py never drops them from the combined report.
+    for key, name, section in (('by_assessment_type', 'per_type_results.json', 'learning_analysis'),
+                               ('ai_vs_traditional', 'ai_vs_traditional.json', None),
+                               ('upper_bound', 'upper_bound.json', None)):
+        path = REPORTS / name
+        if not path.exists():
+            continue
+        saved = json.loads(path.read_text(encoding='utf-8'))
+        if section:
+            report[section].setdefault(key, saved)      # a fresh per-type table from this run wins
+        else:
+            report[key] = saved
     (REPORTS / 'evaluation_report.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
     from make_model_cards import write_model_cards
     print('Model cards:', ', '.join(write_model_cards(report)))

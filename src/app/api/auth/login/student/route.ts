@@ -1,140 +1,68 @@
 import { NextRequest, NextResponse } from 'next/server';
-import bcrypt from 'bcryptjs';
 import { z } from 'zod';
-import { prisma } from '@/lib/prisma';
-import { setAuthCookie } from '@/lib/auth/session';
-import { studentLoginSchema } from '@/lib/validation/schemas';
-import { tokenHash } from '@/lib/api-auth';
+import { clientIp } from '@/lib/auth/client-ip';
+import { createAuthenticatedSession } from '@/lib/auth/session';
+import { verifyPassword } from '@/lib/auth/password';
 import { checkRateLimit, resetRateLimit } from '@/lib/auth/rate-limit';
+import { prisma } from '@/lib/prisma';
+import { studentLoginSchema } from '@/lib/validation/schemas';
+
+const requestSchema = studentLoginSchema.strict();
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const input = studentLoginSchema.parse(body);
+    const input = requestSchema.parse(await req.json());
     const rollNumber = input.rollNumber.trim().toUpperCase();
-    const rateLimitKey = `student:${rollNumber}`;
-    const rateCheck = checkRateLimit(rateLimitKey);
-    if (!rateCheck.allowed) {
+    const rateKey = `student-login:ip:${clientIp(req)}`;
+    const rate = checkRateLimit(rateKey);
+    if (!rate.allowed) {
       return NextResponse.json(
-        {
-          error: `Too many failed attempts. Try again in ${Math.ceil(rateCheck.retryAfterMs / 60000)} minutes.`,
-          code: 'RATE_LIMITED',
-          retryAfterMs: rateCheck.retryAfterMs,
-        },
+        { error: 'Too many sign-in attempts. Please try again later.', code: 'RATE_LIMITED' },
         { status: 429 }
       );
     }
 
-    const dobValue = new Date(input.dob);
-    const dobMatchKey = Number.isNaN(dobValue.getTime()) ? null : new Date(dobValue).toISOString().split('T')[0];
-
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[LOGIN] Attempt:', { rollNumber });
-    }
-
     const student = await prisma.student.findUnique({
       where: { rollNumber },
-      include: { user: true, digitalTwin: true },
+      include: { user: true },
     });
-
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[LOGIN] User found:', !!student);
+    const dateOfBirth = student?.dob.toISOString().slice(0, 10);
+    const validCredentials = Boolean(
+      student &&
+      student.user.role === 'STUDENT' &&
+      student.user.status === 'ACTIVE' &&
+      dateOfBirth === input.dob &&
+      await verifyPassword(input.password, student.user.passwordHash)
+    );
+    if (!validCredentials || !student) {
+      return NextResponse.json({ error: 'Invalid roll number, date of birth, or password.' }, { status: 401 });
     }
 
-    if (!student || student.user.status !== 'ACTIVE') {
-      await prisma.auditLog.create({
-        data: {
-          userId: student?.user?.id,
-          event: 'LOGIN_ATTEMPT',
-          metadata: { rollNumber, success: false },
-          ipAddress: req.headers.get('x-forwarded-for') || 'unknown',
-        },
-      });
-
-      return NextResponse.json(
-        { error: 'Invalid credentials', code: 'INVALID_CREDENTIALS' },
-        { status: 401 }
-      );
-    }
-
-    const storedDob = new Date(student.dob).toISOString().split('T')[0];
-    const dobMatch = dobMatchKey === storedDob;
-    const passwordMatch = await bcrypt.compare(input.password, student.user.passwordHash);
-    const credentialsValid = dobMatch && passwordMatch;
-
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[LOGIN] DOB match:', dobMatch, 'Password match:', passwordMatch, { storedDob, dobMatchKey });
-    }
-
-    await prisma.auditLog.create({
-      data: {
-        userId: student.user.id,
-        event: 'LOGIN_ATTEMPT',
-        metadata: { rollNumber, success: credentialsValid },
-        ipAddress: req.headers.get('x-forwarded-for') || 'unknown',
-      },
-    });
-
-    if (!credentialsValid) {
-      return NextResponse.json(
-        { error: 'Invalid credentials', code: 'INVALID_CREDENTIALS' },
-        { status: 401 }
-      );
-    }
-
-    resetRateLimit(rateLimitKey);
-
-    const payload = {
+    await createAuthenticatedSession({
       userId: student.user.id,
-      role: 'STUDENT' as const,
+      role: 'STUDENT',
       email: student.user.email,
-      name: student.fullName,
-      rollNumber: student.rollNumber,
-      department: student.department,
-    };
-
-    const token = await setAuthCookie(payload);
-
-    await prisma.session.create({
-      data: {
-        userId: student.user.id,
-        tokenHash: tokenHash(token),
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-      },
-    });
-
-    await prisma.auditLog.create({
-      data: {
-        userId: student.user.id,
-        event: 'LOGIN_SUCCESS',
-        metadata: { rollNumber, role: 'STUDENT' },
-        ipAddress: req.headers.get('x-forwarded-for') || 'unknown',
-      },
-    });
+    }, clientIp(req));
+    resetRateLimit(rateKey);
 
     return NextResponse.json({
       success: true,
+      redirectTo: '/student',
       user: {
         id: student.user.id,
-        role: 'STUDENT',
+        studentId: student.id,
         name: student.fullName,
-        rollNumber: student.rollNumber,
         email: student.user.email,
+        role: 'STUDENT',
+        rollNumber: student.rollNumber,
+        department: student.department,
       },
-      redirectTo: '/student',
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: error.issues[0]?.message || 'Invalid login data', code: 'INVALID_INPUT' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: error.issues[0]?.message || 'Invalid request.' }, { status: 400 });
     }
-
-    console.error('[LOGIN_STUDENT_ERROR]', error);
-    return NextResponse.json(
-      { error: 'Internal server error', code: 'SERVER_ERROR' },
-      { status: 500 }
-    );
+    console.error('[STUDENT_LOGIN_ERROR]', error);
+    return NextResponse.json({ error: 'Unable to sign in right now.' }, { status: 500 });
   }
 }

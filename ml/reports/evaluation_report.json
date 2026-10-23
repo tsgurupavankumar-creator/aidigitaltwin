@@ -3,10 +3,10 @@
     "model": "XGBoost Regressor",
     "mae": 9.098045480291903,
     "rmse": 12.783246405630287,
-    "r2": 0.47362246341770986,
+    "r2": 0.47362246341770997,
     "baseline": {
       "model": "mean of earlier scores",
-      "mae": 10.241957149347119,
+      "mae": 10.24195714934712,
       "rmse": 14.200319399094584,
       "r2": 0.3504519964489343
     },
@@ -1099,7 +1099,213 @@
     "coverage": null,
     "note": "rule-based; not evaluated (OULAD has no concept data)"
   },
-  "generated_at": "2026-10-18T13:17:58.212245+00:00",
+  "generated_at": "2026-10-20T06:44:24.480622+00:00",
+  "ai_vs_traditional": {
+    "purpose": "AI digital twin vs the app's traditional-dashboard rules, judged on real OULAD outcomes",
+    "truth": "final_result is Fail or Withdrawn",
+    "traditional_rules": "attendance < 75% OR most recent quiz < 50% OR >= 2 missed assignments",
+    "test": {
+      "students": 3793,
+      "at_risk_rate": 0.42525705246506723,
+      "presentations": [
+        "AAA_2013J",
+        "AAA_2014J",
+        "DDD_2013B",
+        "EEE_2014B",
+        "FFF_2013B"
+      ],
+      "matches_saved_test_predictions": true
+    },
+    "traditional_dashboard": {
+      "tp": 653,
+      "fp": 229,
+      "fn": 960,
+      "tn": 1951,
+      "accuracy": 0.686527814394938,
+      "precision": 0.7403628117913832,
+      "recall": 0.4048357098574086,
+      "specificity": 0.8949541284403669,
+      "f1": 0.523446893787575,
+      "flagged_share": 0.23253361455312418
+    },
+    "ai_early_warning_model": {
+      "tp": 1166,
+      "fp": 642,
+      "fn": 447,
+      "tn": 1538,
+      "accuracy": 0.7128921697864488,
+      "precision": 0.6449115044247787,
+      "recall": 0.7228766274023558,
+      "specificity": 0.7055045871559633,
+      "f1": 0.6816720257234726,
+      "flagged_share": 0.47666754547851303
+    },
+    "ai_risk_level_high_or_critical": {
+      "tp": 1075,
+      "fp": 506,
+      "fn": 538,
+      "tn": 1674,
+      "accuracy": 0.7247561297126285,
+      "precision": 0.6799493991144845,
+      "recall": 0.666460012399256,
+      "specificity": 0.7678899082568807,
+      "f1": 0.6731371321227302,
+      "flagged_share": 0.4168204587397838
+    },
+    "by_week": [
+      {
+        "week": 4,
+        "students": 3923,
+        "traditional": {
+          "tp": 531,
+          "fp": 148,
+          "fn": 1212,
+          "tn": 2032,
+          "accuracy": 0.6533265358144278,
+          "precision": 0.7820324005891016,
+          "recall": 0.3046471600688468,
+          "specificity": 0.9321100917431193,
+          "f1": 0.43848059454995864,
+          "flagged_share": 0.17308182513382617
+        },
+        "ai_early_warning_model": {
+          "tp": 1244,
+          "fp": 756,
+          "fn": 499,
+          "tn": 1424,
+          "accuracy": 0.6800917665052256,
+          "precision": 0.622,
+          "recall": 0.7137119908204246,
+          "specificity": 0.653211009174312,
+          "f1": 0.6647074539139727,
+          "flagged_share": 0.5098139179199592
+        }
+      },
+      {
+        "week": 6,
+        "students": 3862,
+        "traditional": {
+          "tp": 676,
+          "fp": 249,
+          "fn": 1006,
+          "tn": 1931,
+          "accuracy": 0.6750388399792854,
+          "precision": 0.7308108108108108,
+          "recall": 0.40190249702734837,
+          "specificity": 0.8857798165137615,
+          "f1": 0.5186037591100882,
+          "flagged_share": 0.23951320559295702
+        },
+        "ai_early_warning_model": {
+          "tp": 1187,
+          "fp": 691,
+          "fn": 495,
+          "tn": 1489,
+          "accuracy": 0.6929052304505438,
+          "precision": 0.6320553780617678,
+          "recall": 0.7057074910820452,
+          "specificity": 0.6830275229357798,
+          "f1": 0.6668539325842697,
+          "flagged_share": 0.48627654065251164
+        }
+      },
+      {
+        "week": 8,
+        "students": 3789,
+        "traditional": {
+          "tp": 565,
+          "fp": 154,
+          "fn": 1044,
+          "tn": 2026,
+          "accuracy": 0.6838215888097123,
+          "precision": 0.7858136300417247,
+          "recall": 0.3511497824735861,
+          "specificity": 0.9293577981651376,
+          "f1": 0.4853951890034364,
+          "flagged_share": 0.18975983108999736
+        },
+        "ai_early_warning_model": {
+          "tp": 1145,
+          "fp": 605,
+          "fn": 464,
+          "tn": 1575,
+          "accuracy": 0.7178675112166799,
+          "precision": 0.6542857142857142,
+          "recall": 0.711622125543816,
+          "specificity": 0.7224770642201835,
+          "f1": 0.6817505209883893,
+          "flagged_share": 0.4618632884666139
+        }
+      },
+      {
+        "week": 10,
+        "students": 3724,
+        "traditional": {
+          "tp": 687,
+          "fp": 250,
+          "fn": 857,
+          "tn": 1930,
+          "accuracy": 0.7027389903329753,
+          "precision": 0.7331910352187834,
+          "recall": 0.44494818652849744,
+          "specificity": 0.8853211009174312,
+          "f1": 0.5538089480048367,
+          "flagged_share": 0.2516111707841031
+        },
+        "ai_early_warning_model": {
+          "tp": 1117,
+          "fp": 571,
+          "fn": 427,
+          "tn": 1609,
+          "accuracy": 0.7320085929108485,
+          "precision": 0.6617298578199052,
+          "recall": 0.7234455958549223,
+          "specificity": 0.7380733944954129,
+          "f1": 0.6912128712871287,
+          "flagged_share": 0.4532760472610097
+        }
+      },
+      {
+        "week": 12,
+        "students": 3665,
+        "traditional": {
+          "tp": 739,
+          "fp": 267,
+          "fn": 746,
+          "tn": 1913,
+          "accuracy": 0.7236016371077763,
+          "precision": 0.7345924453280318,
+          "recall": 0.49764309764309766,
+          "specificity": 0.8775229357798165,
+          "f1": 0.5933360096346848,
+          "flagged_share": 0.2744884038199181
+        },
+        "ai_early_warning_model": {
+          "tp": 1077,
+          "fp": 529,
+          "fn": 408,
+          "tn": 1651,
+          "accuracy": 0.7443383356070942,
+          "precision": 0.6706102117061021,
+          "recall": 0.7252525252525253,
+          "specificity": 0.7573394495412844,
+          "f1": 0.6968618570042058,
+          "flagged_share": 0.43819918144611186
+        }
+      }
+    ],
+    "early_detection": {
+      "students_who_failed_or_withdrew_caught_by_both": 959,
+      "mean_weeks_ai_earlier": 1.6642335766423357,
+      "ai_earlier_share": 0.40667361835245047,
+      "same_week_share": 0.5860271115745568,
+      "rule_earlier_share": 0.0072992700729927005,
+      "caught_only_by_ai": 506,
+      "caught_only_by_traditional": 10,
+      "note": "first week (4, 6, 8, 10, 12) at which each method flags a student who later failed or withdrew; students who had already left by a week are excluded from that week"
+    },
+    "verdict": "On 3793 unseen students: traditional rules precision 74.0%, recall 40.5%, flagging 23% of students; AI model precision 64.5%, recall 72.3%, flagging 48%."
+  },
   "upper_bound": {
     "purpose": "research only: what richer data (not collected by the app) would add; no model here is used by the app",
     "extra_inputs": [

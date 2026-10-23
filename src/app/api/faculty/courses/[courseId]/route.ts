@@ -1,195 +1,156 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { prisma } from '@/lib/prisma';
 import { requireRole } from '@/lib/api-auth';
-import { isAtRiskLevel } from '@/lib/risk/at-risk';
+import { prisma } from '@/lib/prisma';
 
-export async function GET(req: NextRequest, props: { params: Promise<{ courseId: string }> }) {
-  const params = await props.params;
+interface RouteContext {
+  params: Promise<{ courseId: string }>;
+}
+
+const enrollmentSchema = z.object({ studentName: z.string().trim().min(1).max(120) }).strict();
+
+export async function GET(_req: NextRequest, context: RouteContext) {
   const auth = await requireRole('faculty');
   if ('error' in auth) return auth.error;
-
-  try {
-    const { courseId } = params;
-
-    const course = await prisma.course.findFirst({
-      where: {
-        id: courseId,
-        facultyId: auth.user.faculty!.id,
-      },
-      include: {
-        enrollments: {
-          include: {
-            student: {
-              include: {
-                digitalTwin: true,
-                riskAssessments: {
-                  orderBy: { createdAt: 'desc' },
-                  take: 1,
-                },
-                attendance: {
-                  where: { lecture: { courseId } },
-                  select: { status: true },
-                },
-              },
+  const { courseId } = await context.params;
+  const course = await prisma.course.findFirst({
+    where: { id: courseId, facultyId: auth.user.faculty!.id },
+    include: {
+      lectures: { orderBy: { date: 'asc' }, take: 1, select: { date: true, time: true, room: true } },
+      enrollments: {
+        include: {
+          student: {
+            include: {
+              digitalTwin: true,
+              riskAssessments: { orderBy: { createdAt: 'desc' }, take: 1, select: { riskLevel: true, riskScore: true } },
+              attendance: { where: { lecture: { courseId } }, select: { status: true } },
             },
           },
         },
-        lectures: {
-          take: 1,
-          orderBy: { date: 'asc' },
-        },
       },
-    });
+      _count: { select: { lectures: true } },
+      concepts: { select: { id: true, name: true } },
+    },
+  });
+  if (!course) return NextResponse.json({ error: 'Course not found.' }, { status: 404 });
 
-    if (!course) {
-      return NextResponse.json({ error: 'Course not found' }, { status: 404 });
-    }
-
-    const students = course.enrollments.map((e) => {
-      const st = e.student;
-      const latestRisk = st.riskAssessments[0];
-      const totalAtt = st.attendance.length;
-      const presentAtt = st.attendance.filter(
-        (a) => a.status === 'PRESENT' || a.status === 'LATE'
-      ).length;
-      const attPct = totalAtt ? Math.round((presentAtt / totalAtt) * 100) : st.digitalTwin ? Math.round(st.digitalTwin.attendanceScore) : null;
-
-      return {
-        id: st.id,
-        rollNumber: st.rollNumber,
-        name: st.fullName,
-        // null means "no data yet". These used to default to 75 / 85 / LOW / 25,
-        // which displayed invented numbers for students nobody had measured.
-        academicHealth: st.digitalTwin ? Math.round(st.digitalTwin.academicHealth) : null,
-        attendance: attPct,
-        riskLevel: latestRisk?.riskLevel ?? null,
-        riskScore: latestRisk ? Math.round(latestRisk.riskScore) : null,
-      };
-    });
-
-    const atRiskCount = students.filter((s) => isAtRiskLevel(s.riskLevel)).length;
-
-    // Average only over students who actually have data; null if nobody does.
-    const average = (values: Array<number | null>): number | null => {
-      const known = values.filter((v): v is number => v !== null);
-      return known.length ? Math.round(known.reduce((sum, v) => sum + v, 0) / known.length) : null;
+  const students = course.enrollments.map(({ student }) => {
+    const risk = student.riskAssessments[0];
+    return {
+      id: student.id,
+      rollNumber: student.rollNumber,
+      name: student.fullName,
+      academicHealth: student.digitalTwin?.academicHealth ?? null,
+      attendance: student.digitalTwin?.attendanceScore ?? null,
+      riskLevel: risk?.riskLevel ?? null,
+      riskScore: risk?.riskScore ?? null,
     };
-    const avgHealth = average(students.map((s) => s.academicHealth));
-    const avgAttendance = average(students.map((s) => s.attendance));
+  });
+  const healthValues = students.map((student) => student.academicHealth).filter((value): value is number => value !== null);
+  const attendanceValues = students.map((student) => student.attendance).filter((value): value is number => value !== null);
+  const schedule = course.lectures[0]
+    ? `${course.lectures[0].room} • ${course.lectures[0].time}`
+    : null;
 
-    const schedule = course.lectures[0]
-      ? `${course.lectures[0].room} • ${course.lectures[0].time}`
-      : null; // only report a schedule that really exists (was a made-up 'MWF 10:00 AM')
-
-    return NextResponse.json({
-      data: {
-        id: course.id,
-        code: course.code,
-        name: course.name,
-        department: course.department,
-        term: `Semester ${course.semester}`,
-        schedule,
-        students,
-        atRiskCount,
-        avgHealth,
-        avgAttendance,
-      },
-    });
-  } catch (error) {
-    console.error('[FACULTY_COURSE_DETAIL_GET_ERROR]', error);
-    return NextResponse.json({ error: 'Failed to fetch course details' }, { status: 500 });
-  }
+  return NextResponse.json({
+    data: {
+      id: course.id,
+      code: course.code,
+      name: course.name,
+      department: course.department,
+      semester: course.semester,
+      schedule,
+      students,
+      avgHealth: healthValues.length ? healthValues.reduce((sum, value) => sum + value, 0) / healthValues.length : null,
+      avgAttendance: attendanceValues.length ? attendanceValues.reduce((sum, value) => sum + value, 0) / attendanceValues.length : null,
+      concepts: course.concepts ?? [],
+      lectureCount: course._count?.lectures ?? course.lectures.length,
+    },
+  });
 }
 
-const enrollmentSchema = z.object({
-  studentName: z.string().trim().min(1).max(120),
-});
-
-export async function POST(req: NextRequest, props: { params: Promise<{ courseId: string }> }) {
-  const params = await props.params;
+export async function POST(req: NextRequest, context: RouteContext) {
   const auth = await requireRole('faculty');
   if ('error' in auth) return auth.error;
-
   try {
     const input = enrollmentSchema.parse(await req.json());
-    const course = await prisma.course.findFirst({ where: { id: params.courseId, facultyId: auth.user.faculty!.id } });
-    if (!course) return NextResponse.json({ error: 'Course not found' }, { status: 404 });
-
-    // Roll numbers are unique, so an exact roll-number match is unambiguous and is
-    // tried first. Full names are NOT unique, and this used to take whichever
-    // matching row the database returned first, so it could silently enroll the
-    // wrong person. If several students share the name, refuse and ask for the
-    // roll number instead of guessing.
-    const select = { id: true, fullName: true, rollNumber: true } as const;
-    let student = await prisma.student.findFirst({
-      where: { rollNumber: { equals: input.studentName, mode: 'insensitive' } },
-      select,
+    const { courseId } = await context.params;
+    const course = await prisma.course.findFirst({
+      where: { id: courseId, facultyId: auth.user.faculty!.id },
+      select: { id: true },
     });
+    if (!course) return NextResponse.json({ error: 'Course not found.' }, { status: 404 });
+
+    const rollNumber = input.studentName.trim().toUpperCase();
+    const studentByRoll = await prisma.student.findFirst({
+      where: { rollNumber },
+      select: { id: true, fullName: true, rollNumber: true },
+    });
+    let student = studentByRoll;
     if (!student) {
-      const nameMatches = await prisma.student.findMany({
+      const matches = await prisma.student.findMany({
         where: { fullName: { equals: input.studentName, mode: 'insensitive' } },
-        select,
-        take: 2,
+        select: { id: true, fullName: true, rollNumber: true },
       });
-      if (nameMatches.length > 1) {
-        return NextResponse.json(
-          { error: 'More than one student has that name. Enter the roll number instead.', code: 'AMBIGUOUS_STUDENT' },
-          { status: 409 }
-        );
+      if (matches.length > 1) {
+        return NextResponse.json({ error: 'More than one student has that name.', code: 'AMBIGUOUS_STUDENT' }, { status: 409 });
       }
-      student = nameMatches[0] ?? null;
+      student = matches[0] ?? null;
     }
-    if (!student) return NextResponse.json({ error: 'Student not found. Use the registered full name or roll number.' }, { status: 404 });
+    if (!student) return NextResponse.json({ error: 'Student not found.' }, { status: 404 });
 
     const existing = await prisma.enrollment.findUnique({
-      where: { studentId_courseId: { studentId: student.id, courseId: course.id } },
+      where: { studentId_courseId: { studentId: student.id, courseId } },
     });
-    if (existing) return NextResponse.json({ data: { ...student, alreadyEnrolled: true } });
+    if (existing) return NextResponse.json({ data: { alreadyEnrolled: true } });
 
-    await prisma.enrollment.create({ data: { studentId: student.id, courseId: course.id } });
-    return NextResponse.json({ data: { ...student, alreadyEnrolled: false } }, { status: 201 });
+    const enrollment = await prisma.enrollment.create({
+      data: { studentId: student.id, courseId },
+    });
+    return NextResponse.json({ data: enrollment }, { status: 201 });
   } catch (error) {
-    if (error instanceof z.ZodError) return NextResponse.json({ error: error.issues[0].message }, { status: 400 });
+    if (error instanceof z.ZodError) return NextResponse.json({ error: error.issues[0]?.message || 'Invalid request.' }, { status: 400 });
+    console.error('[FACULTY_COURSE_ENROLL_ERROR]', error);
     return NextResponse.json({ error: 'Unable to enroll student.' }, { status: 500 });
   }
 }
 
-export async function DELETE(_req: NextRequest, props: { params: Promise<{ courseId: string }> }) {
-  const params = await props.params;
+export async function DELETE(_req: NextRequest, context: RouteContext) {
   const auth = await requireRole('faculty');
   if ('error' in auth) return auth.error;
-  const course = await prisma.course.findFirst({ where: { id: params.courseId, facultyId: auth.user.faculty!.id }, select: { id: true } });
-  if (!course) return NextResponse.json({ error: 'Course not found' }, { status: 404 });
+  const { courseId } = await context.params;
+  const course = await prisma.course.findFirst({
+    where: { id: courseId, facultyId: auth.user.faculty!.id },
+    select: { id: true },
+  });
+  if (!course) return NextResponse.json({ error: 'Course not found.' }, { status: 404 });
 
-  // Deleting a course cascades (onDelete: Cascade in schema.prisma) into its
-  // enrollments, lectures and attendance, assignments and submissions (grades),
-  // quizzes and attempts, concepts, concept mastery, knowledge-graph edges and
-  // study tasks. That is every student's academic history, erased by one request
-  // with no undo. So only a course that holds NONE of that can be deleted here.
-  const where = { courseId: course.id };
   const [enrollments, lectures, topics, concepts, assignments, quizzes, insights] = await Promise.all([
-    prisma.enrollment.count({ where }),
-    prisma.lecture.count({ where }),
-    prisma.topic.count({ where }),
-    prisma.concept.count({ where }),
-    prisma.assignment.count({ where }),
-    prisma.quiz.count({ where }),
-    prisma.classInsight.count({ where }),
+    prisma.enrollment.count({ where: { courseId } }),
+    prisma.lecture.count({ where: { courseId } }),
+    prisma.topic.count({ where: { courseId } }),
+    prisma.concept.count({ where: { courseId } }),
+    prisma.assignment.count({ where: { courseId } }),
+    prisma.quiz.count({ where: { courseId } }),
+    prisma.classInsight.count({ where: { courseId } }),
   ]);
-  const holds = Object.entries({ enrollments, lectures, topics, concepts, assignments, quizzes, 'class insights': insights })
-    .filter(([, count]) => count > 0)
-    .map(([name, count]) => `${count} ${name}`);
-  if (holds.length > 0) {
+  const total = enrollments + lectures + topics + concepts + assignments + quizzes + insights;
+  if (total) {
+    const details = [
+      enrollments && `${enrollments} enrollments`,
+      lectures && `${lectures} lectures`,
+      topics && `${topics} topics`,
+      concepts && `${concepts} concepts`,
+      assignments && `${assignments} assignments`,
+      quizzes && `${quizzes} quizzes`,
+      insights && `${insights} insights`,
+    ].filter(Boolean).join(', ');
     return NextResponse.json(
-      {
-        error: `This course can't be deleted because it still holds ${holds.join(', ')}. Deleting it would permanently erase attendance, grades, quiz results and concept mastery for every student in it.`,
-        code: 'COURSE_HAS_DATA',
-      },
+      { error: `Course contains ${details} and cannot be deleted.`, code: 'COURSE_HAS_DATA' },
       { status: 409 }
     );
   }
 
-  await prisma.course.delete({ where: { id: course.id } });
+  await prisma.course.delete({ where: { id: courseId } });
   return NextResponse.json({ success: true });
 }

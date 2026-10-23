@@ -1,5 +1,15 @@
 # Audit fixes
 
+## Round 12 (2026-10-20): ML side of the final checklist (on top of the team's v14)
+
+1. **Python 3.14.** Changing only pandas is not enough: numpy 2.2.1 and scikit-learn 1.6.1 have no Python 3.14 wheels either (checked against PyPI for win_amd64). `ml/requirements.txt` now pins pandas 2.3.3, numpy 2.3.4, scikit-learn 1.7.2 (all ship 3.14 wheels; also fine on 3.12). The saved models give **identical predictions** under these versions (6,000 rows, max difference 0.0); 37/37 ML tests and the live service (`/health`, a prediction with reasons) pass. A harmless `InconsistentVersionWarning` about the calibrator may print.
+2. **Comparison on a meaningful sample, with real outcomes** (`python compare_ai_vs_traditional.py`). Generating random dummy students would grade the AI against noise, and the app's own comparison uses a mastery proxy (and is partly circular). This applies the app's exact traditional-dashboard rules (attendance < 75%, latest quiz < 50%, ≥ 2 missed assignments) and the deployed AI to the 3,793 unseen OULAD test students with real fail/withdraw outcomes; the rebuilt test set reproduces the saved predictions exactly.
+   - Traditional: recall 40.5%, precision 74.0%, F1 0.523, flags 23%. AI early-warning: recall 72.3%, precision 64.5%, F1 0.682, flags 48%. AI risk level HIGH/CRITICAL: recall 66.6%, precision 68.0%, F1 0.673, accuracy 72.5%.
+   - Week 4: traditional recall 30.5% vs AI 71.4%. Of 959 students who later failed or withdrew and were caught by both, the AI was earlier for 41% (mean 1.7 weeks), the rules for 0.7%; 506 caught only by the AI, 10 only by the rules.
+   - The app's `npm run report:comparison` still runs on the live database; with few students and no real outcomes it is a pipeline check, not evidence.
+
+---
+
 ## Round 11 (2026-10-18): team update merged and checked; per-type results and upper bound
 
 **Team update (D3–D11, see `UPGRADE_NOTES_D3_D11.md`):** optional LLM-written study recommendations (off by default, privacy-minimised, rule-based fallback), orchestrator writes in one database transaction, Zod validation on agent and student write routes, faculty "Mark complete" for interventions. Its notes say tests and build were not run; they were run here: build passed, **3 orchestrator tests failed**.

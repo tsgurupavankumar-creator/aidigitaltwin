@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
+import { join } from 'node:path';
 
 process.env.JWT_SECRET = randomBytes(48).toString('base64');
 
@@ -27,8 +28,12 @@ test('isUsableSecret: accepts a real random secret', async () => {
 
 test('the server refuses to start with the placeholder secret', () => {
   const script = "import('./src/lib/auth/jwt').then(()=>{console.log('STARTED');process.exit(0)}).catch(e=>{console.log('REFUSED:'+e.message);process.exit(0)})";
-  const out = execFileSync('npx', ['tsx', '-e', script], {
-    env: { ...process.env, JWT_SECRET: PLACEHOLDER }, encoding: 'utf8', cwd: process.cwd(),
+  const env = { ...process.env, JWT_SECRET: PLACEHOLDER };
+  const tsxCli = join(process.cwd(), 'node_modules', 'tsx', 'dist', 'cli.mjs');
+  const out = execFileSync(process.execPath, [tsxCli, '-e', script], {
+    env,
+    encoding: 'utf8',
+    cwd: process.cwd(),
   });
   assert.match(out, /REFUSED:.*placeholder/);
 });

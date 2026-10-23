@@ -188,6 +188,7 @@ Question wording is stored in `Question.options` as `{ prompt, choices }` becaus
 - `cd ml && python evaluate.py`: writes `ml/reports/evaluation_report.json` and the model cards `ml/reports/MODEL_CARD_*.md`.
 - `cd ml && python per_type_results.py`: marks-model results per assessment type (quizzes, assignments, exams, and quizzes + assignments, which is what the app predicts) from the saved model, without retraining.
 - `cd ml && python upper_bound_experiment.py`: research only; how much richer OULAD-only data (not collected by the app; no demographics) would improve both models under identical settings.
+- `cd ml && python compare_ai_vs_traditional.py`: the AI vs the app's traditional-dashboard rules on 3,793 unseen OULAD students with real fail/withdraw outcomes (precision, recall, F1 by week, and how early each catches students).
 - `npm run eval:knowledge-gap`: on the app's real data, checks whether concepts the knowledge-gap agent flags are answered wrongly more often afterwards (`ml/reports/knowledge_gap_eval.json`).
 - `npm run ml:export -- outcomes.csv`: exports the app's data in OULAD format to `ml/app_data/` for retraining on your own students (`outcomes.csv`: rollNumber, courseCode, result). Then `cd ml && OULAD_DIR=app_data python train_learning_analysis.py` and the other scripts. Only meaningful after a full course run with enough students.
 - Every saved risk assessment records which model versions and risk settings produced it (`explanation.models`); `GET /health` on the ML service shows the loaded versions.
@@ -196,7 +197,7 @@ Question wording is stored in `Question.options` as `{ prompt, choices }` becaus
 
 ```bash
 npm test                                         # 149 TypeScript tests
-cd ml && python -m unittest discover -s tests    # 36 Python tests (training pipeline)
+cd ml && python -m unittest discover -s tests    # 37 Python tests (training pipeline)
 ```
 
 The TypeScript tests cover the CSRF client and server, risk scoring, orchestrator control flow, comparison metrics, route handlers, agent-log access, session revocation, rate limiting, signup rules, secret validation, password-reset email, password rotation, and the dynamic twin: mastery rules, class insights, CSV import, quiz grading, the sync engine, route ownership checks, and end-to-end tests where recording attendance or a quiz attempt changes the twin, risk, alerts and class insight with no button press. They use stubs, so no database, ML service or network is needed. The Python tests check the leakage rules of the training features and run train, evaluate and serve end to end on synthetic OULAD-format data (never on the shipped models).

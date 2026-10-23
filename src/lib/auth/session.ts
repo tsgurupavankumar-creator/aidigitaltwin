@@ -45,6 +45,31 @@ export async function setAuthCookie(payload: TokenPayload): Promise<string> {
   return token;
 }
 
+export async function createAuthenticatedSession(payload: TokenPayload, ipAddress?: string): Promise<string> {
+  const token = await signToken(payload);
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+  await prisma.session.create({
+    data: {
+      userId: payload.userId,
+      tokenHash: hashToken(token),
+      expiresAt,
+      ipAddress,
+    },
+  });
+
+  const cookieStore = await cookies();
+  cookieStore.set(SESSION_COOKIE_NAME, token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 60 * 60 * 24 * 7,
+  });
+
+  return token;
+}
+
 export async function getAuthSession(): Promise<JWTPayloadData | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;

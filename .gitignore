@@ -18,3 +18,8 @@ node_modules/
 .env.* 
 rotated-credentials.local.csv 
 ml/.venv/ 
+node_modules/ 
+.next/ 
+.env 
+.env.* 
+rotated-credentials.local.csv 

@@ -83,12 +83,31 @@ async function main() {
   ];
   const faculties = [] as { id: string; userId: string }[];
   for (const [facultyId, fullName, email] of facultySpecs) {
-    const user = await prisma.user.create({
-      data: { email, passwordHash: facultyHash, role: UserRole.FACULTY, faculty: { create: { facultyId, fullName, department: 'Computer Science', designation: 'Professor' } } },
-      include: { faculty: true },
+    const user = await prisma.user.upsert({
+      where: { email },
+      create: { email, passwordHash: facultyHash, role: UserRole.FACULTY, status: AccountStatus.ACTIVE },
+      update: { passwordHash: facultyHash, role: UserRole.FACULTY, status: AccountStatus.ACTIVE },
+      select: { id: true },
     });
-    faculties.push({ id: user.faculty!.id, userId: user.id });
-    console.log(`Created faculty ${facultyId}`);
+    const faculty = await prisma.faculty.upsert({
+      where: { facultyId },
+      create: {
+        userId: user.id,
+        facultyId,
+        fullName,
+        department: 'Computer Science',
+        designation: 'Professor',
+      },
+      update: {
+        userId: user.id,
+        fullName,
+        department: 'Computer Science',
+        designation: 'Professor',
+      },
+      select: { id: true },
+    });
+    faculties.push({ id: faculty.id, userId: user.id });
+    console.log(`Ensured faculty ${facultyId}`);
   }
   const studentSpecs = [
     ['24BCE0480', 'Mandalapu Umesh Kumar', '2005-06-15', 'umesh.kumar@university.edu'],
@@ -98,18 +117,47 @@ async function main() {
   const students = [] as { id: string; userId: string; fullName: string }[];
   for (const [rollNumber, fullName, dob, email] of studentSpecs) {
     const studentHash = await bcrypt.hash(studentDefaultPassword, 10);
-    const user = await prisma.user.create({
-      data: { email, passwordHash: studentHash, role: UserRole.STUDENT, student: { create: { rollNumber, fullName, dob: new Date(`${dob}T00:00:00.000Z`), department: 'Computer Science', year: 2, semester: 4, section: 'A' } } },
-      include: { student: true },
+    const user = await prisma.user.upsert({
+      where: { email },
+      create: { email, passwordHash: studentHash, role: UserRole.STUDENT, status: AccountStatus.ACTIVE },
+      update: { passwordHash: studentHash, role: UserRole.STUDENT, status: AccountStatus.ACTIVE },
+      select: { id: true },
     });
-    students.push({ id: user.student!.id, userId: user.id, fullName });
-    console.log(`Created student ${rollNumber}`);
+    const student = await prisma.student.upsert({
+      where: { rollNumber },
+      create: {
+        userId: user.id,
+        rollNumber,
+        fullName,
+        dob: new Date(`${dob}T00:00:00.000Z`),
+        department: 'Computer Science',
+        year: 2,
+        semester: 4,
+        section: 'A',
+      },
+      update: {
+        userId: user.id,
+        fullName,
+        dob: new Date(`${dob}T00:00:00.000Z`),
+        department: 'Computer Science',
+        year: 2,
+        semester: 4,
+        section: 'A',
+      },
+      select: { id: true },
+    });
+    students.push({ id: student.id, userId: user.id, fullName });
+    console.log(`Ensured student ${rollNumber}`);
   }
   const courses = [] as { id: string; code: string }[];
   for (const [code, name, facultyId] of [['CS301', 'Database Management Systems', faculties[0].id], ['CS302', 'Operating Systems', faculties[1].id]]) {
-    const course = await prisma.course.create({ data: { code, name, credits: 4, semester: 4, department: 'Computer Science', facultyId } });
+    const course = await prisma.course.upsert({
+      where: { code },
+      create: { code, name, credits: 4, semester: 4, department: 'Computer Science', facultyId },
+      update: { name, credits: 4, semester: 4, department: 'Computer Science', facultyId },
+    });
     courses.push({ id: course.id, code });
-    console.log(`Created course ${code}`);
+    console.log(`Ensured course ${code}`);
   }
   const conceptNames = [
     ['Normalization', 'Transactions', 'SQL', 'Indexing', 'ER Model', 'Relational Algebra', 'Concurrency Control', 'Recovery'],

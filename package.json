@@ -17,7 +17,8 @@
     "twin:weekly-review": "tsx scripts/weekly-review.ts",
     "quizzes:fix-seeded": "tsx scripts/fix-seeded-quizzes.ts",
     "eval:knowledge-gap": "tsx scripts/evaluate-knowledge-gap.ts",
-    "ml:export": "tsx scripts/export-training-data.ts"
+    "ml:export": "tsx scripts/export-training-data.ts",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
@@ -26,7 +27,7 @@
     "framer-motion": "^11.0.8",
     "jose": "^5.9.6",
     "lucide-react": "^0.350.0",
-    "next": "15.5.27",
+    "next": "^15.5.28",
     "nodemailer": "10.0.13",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
@@ -45,7 +46,7 @@
     "@types/react-dom": "^18.2.19",
     "autoprefixer": "^10.4.18",
     "postcss": "8.5.28",
-    "prisma": "^5.22.0",
+    "prisma": "5.22.0",
     "tailwindcss": "^3.4.1",
     "tsx": "^4.19.2",
     "typescript": "^5.3.3"

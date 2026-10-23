@@ -1,49 +1,108 @@
-import { Prisma } from '@prisma/client';
 import { NextRequest, NextResponse } from 'next/server';
+import bcrypt from 'bcryptjs';
 import { z } from 'zod';
-import { clientIp } from '@/lib/auth/client-ip';
-import { hashPassword } from '@/lib/auth/password';
 import { checkRateLimit } from '@/lib/auth/rate-limit';
+import { clientIp } from '@/lib/auth/client-ip';
 import { prisma } from '@/lib/prisma';
 import { facultySignupSchema } from '@/lib/validation/schemas';
 
 export async function POST(req: NextRequest) {
-  const rate = checkRateLimit(`faculty-signup:ip:${clientIp(req)}`, { max: 20 });
-  if (!rate.allowed) {
-    return NextResponse.json(
-      { error: 'Too many signup attempts. Please try again later.', code: 'RATE_LIMITED' },
-      { status: 429 }
-    );
-  }
-
   try {
-    const input = facultySignupSchema.parse(await req.json());
+    // Throttle account creation per client IP before doing any work. The limit is
+    // deliberately looser than login (20 per window) because many students can
+    // share one campus IP.
+    const rate = checkRateLimit(`signup:ip:${clientIp(req)}`, { max: 20 });
+    if (!rate.allowed) {
+      return NextResponse.json(
+        { error: `Too many sign-up attempts. Try again in ${Math.ceil(rate.retryAfterMs / 60000)} minutes.`, code: 'RATE_LIMITED' },
+        { status: 429 }
+      );
+    }
+
+    const body = await req.json();
+    const input = facultySignupSchema.parse(body);
+
+    const normalizedEmail = input.email.toLowerCase().trim();
+    const normalizedFacultyId = input.facultyId.toUpperCase().trim();
+
+    const existingEmail = await prisma.user.findUnique({
+      where: { email: normalizedEmail },
+    });
+
+    if (existingEmail) {
+      return NextResponse.json(
+        { error: 'Email already registered', code: 'EMAIL_EXISTS' },
+        { status: 409 }
+      );
+    }
+
+    const existingFaculty = await prisma.faculty.findUnique({
+      where: { facultyId: normalizedFacultyId },
+    });
+
+    if (existingFaculty) {
+      return NextResponse.json(
+        { error: 'Faculty ID already registered', code: 'FACULTY_EXISTS' },
+        { status: 409 }
+      );
+    }
+
+    const passwordHash = await bcrypt.hash(input.password, 10);
+
     const user = await prisma.user.create({
       data: {
-        email: input.email.trim().toLowerCase(),
-        passwordHash: await hashPassword(input.password),
+        email: normalizedEmail,
+        passwordHash,
         role: 'FACULTY',
         status: 'PENDING',
         faculty: {
           create: {
-            facultyId: input.facultyId.trim().toUpperCase(),
+            facultyId: normalizedFacultyId,
             fullName: input.fullName.trim(),
-            department: input.department.trim(),
-            designation: 'Faculty',
+            department: input.department || 'Computer Science',
+            designation: 'Professor',
           },
         },
       },
-      select: { id: true },
+      include: { faculty: true },
     });
-    return NextResponse.json({ success: true, userId: user.id }, { status: 201 });
+
+    await prisma.auditLog.create({
+      data: {
+        userId: user.id,
+        event: 'FACULTY_SIGNUP_PENDING',
+        metadata: { facultyId: normalizedFacultyId, role: 'FACULTY' },
+        ipAddress: req.headers.get('x-forwarded-for') || 'unknown',
+      },
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: 'Faculty account created. Awaiting admin approval.',
+      user: {
+        id: user.id,
+        role: 'FACULTY',
+        name: user.faculty!.fullName,
+        facultyId: user.faculty!.facultyId,
+        email: user.email,
+        status: 'PENDING',
+      },
+    });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: error.issues[0]?.message || 'Invalid request.' }, { status: 400 });
+      return NextResponse.json(
+        {
+          error: error.issues[0]?.message || 'Invalid signup data',
+          code: 'INVALID_INPUT',
+        },
+        { status: 400 }
+      );
     }
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-      return NextResponse.json({ error: 'An account with this email or faculty ID already exists.' }, { status: 409 });
-    }
-    console.error('[FACULTY_SIGNUP_ERROR]', error);
-    return NextResponse.json({ error: 'Unable to create faculty account.' }, { status: 500 });
+
+    console.error('[SIGNUP_FACULTY_ERROR]', error);
+    return NextResponse.json(
+      { error: 'Internal server error', code: 'SERVER_ERROR' },
+      { status: 500 }
+    );
   }
 }

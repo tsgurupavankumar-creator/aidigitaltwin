@@ -1,0 +1,44 @@
+{
+  "source": "saved model, rebuilt test set (seed 42)",
+  "model_version": "2026-10-18T13:15:19+00:00",
+  "all": {
+    "n": 23789,
+    "mae": 9.098045480291903,
+    "r2": 0.47362246341770986,
+    "baseline_mae": 10.241957149347119,
+    "improvement_pct": 11.168877709355923
+  },
+  "CMA": {
+    "label": "quizzes (computer-marked)",
+    "n": 10912,
+    "mae": 8.070161337726626,
+    "r2": 0.5339909325385587,
+    "baseline_mae": 9.525740523426558,
+    "improvement_pct": 15.28048325608115
+  },
+  "TMA": {
+    "label": "assignments (tutor-marked)",
+    "n": 12275,
+    "mae": 9.811160397034312,
+    "r2": 0.3994561922493832,
+    "baseline_mae": 10.482415534454232,
+    "improvement_pct": 6.4036303007984925
+  },
+  "Exam": {
+    "label": "exams",
+    "n": 602,
+    "mae": 13.189052391685916,
+    "r2": 0.09893951990395355,
+    "baseline_mae": 18.321241443126826,
+    "improvement_pct": 28.012234145662877
+  },
+  "coursework": {
+    "label": "quizzes + assignments (what the app predicts)",
+    "n": 23187,
+    "mae": 8.991831387884123,
+    "r2": 0.468965821568363,
+    "baseline_mae": 10.032196113212414,
+    "improvement_pct": 10.370259049841842
+  },
+  "matches_saved_test": true
+}

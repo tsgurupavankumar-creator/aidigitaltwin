@@ -1,0 +1,62 @@
+import { z } from 'zod';
+
+const idString = z.string().min(10, 'Invalid ID').max(64, 'Invalid ID').regex(/^[a-z0-9-]+$/i, 'Invalid ID');
+const questionType = z.enum(['mcq', 'true_false', 'short_answer']);
+
+export const QuizGenerationRequestSchema = z.object({
+  courseId: idString,
+  syllabusId: idString,
+  studentId: idString,
+  selectedTopicIds: z.array(idString).min(1, 'Select at least one topic').max(200, 'Select at most 200 topics'),
+  questionCount: z.number().int().min(1, 'Question count must be at least 1').max(30, 'Question count must be at most 30').default(10),
+  questionTypes: z.array(questionType).min(1, 'Select at least one question type').max(3).default(['mcq', 'true_false', 'short_answer']),
+  difficulty: z.enum(['easy', 'medium', 'hard', 'mixed']).default('mixed'),
+  targetDifficulty: z.enum(['BEGINNER', 'INTERMEDIATE', 'ADVANCED']).optional(),
+  mode: z.enum(['practice', 'assessment', 'generated']).default('generated'),
+  syllabusTopicId: idString.optional(),
+  timeLimitSec: z.number().int().min(0).max(3600).optional(),
+}).strict();
+
+const questionBase = {
+  prompt: z.string().trim().min(1, 'Question prompt is required').max(2000, 'Question prompt must be 2,000 characters or fewer'),
+  explanation: z.string().max(1000, 'Explanation must be 1,000 characters or fewer').optional(),
+  syllabusTopicId: idString,
+  conceptId: idString.nullable(),
+  difficulty: z.enum(['easy', 'medium', 'hard']),
+};
+
+const mcqQuestionSchema = z.object({
+  ...questionBase,
+  type: z.literal('mcq'),
+  options: z.array(z.string().trim().min(1, 'Options cannot be empty').max(500, 'An option must be 500 characters or fewer'))
+    .min(2, 'Multiple-choice questions need at least two options')
+    .max(6, 'Multiple-choice questions may have at most six options'),
+  correctAnswer: z.string().trim().min(1, 'Correct answer is required').max(500, 'Correct answer must be 500 characters or fewer'),
+}).strict();
+
+const trueFalseQuestionSchema = z.object({
+  ...questionBase,
+  type: z.literal('true_false'),
+  correctAnswer: z.enum(['true', 'false'], {
+    error: 'Correct answer must be lowercase "true" or "false"',
+  }),
+}).strict();
+
+const shortAnswerQuestionSchema = z.object({
+  ...questionBase,
+  type: z.literal('short_answer'),
+  correctAnswer: z.string().trim().min(1, 'Correct answer is required').max(500, 'Correct answer must be 500 characters or fewer'),
+}).strict();
+
+const questionSchema = z.discriminatedUnion('type', [
+  mcqQuestionSchema,
+  trueFalseQuestionSchema,
+  shortAnswerQuestionSchema,
+]).refine(
+  (question) => question.type !== 'mcq' || question.options.includes(question.correctAnswer),
+  { message: 'Correct answer must be one of the options', path: ['correctAnswer'] },
+);
+
+export const QuizGenerationOutputSchema = z.object({
+  questions: z.array(questionSchema).min(1, 'At least one question is required').max(30, 'A quiz may have at most 30 questions'),
+}).strict();

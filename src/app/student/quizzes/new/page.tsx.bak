@@ -1,0 +1,218 @@
+'use client';
+
+import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { HairlineRule } from '@/components/ui/HairlineRule';
+import { Button, NoticeBox, Panel } from '@/components/twin/ui';
+import { ModuleTopicSelector } from '@/components/syllabus/ModuleTopicSelector';
+import { QuizSettingsPanel } from '@/components/syllabus/QuizSettingsPanel';
+import { SyllabusUploader } from '@/components/syllabus/SyllabusUploader';
+import { WizardStepper } from '@/components/syllabus/WizardStepper';
+import type { WizardState, WizardStep } from '@/components/syllabus/types';
+import { useAuthStore } from '@/store/authStore';
+import { QuizGenerationRequestSchema } from '@/lib/validation/quiz-generation';
+import { SyllabusTopicSelectionSchema } from '@/lib/validation/syllabus';
+
+const steps: WizardStep[] = ['course', 'upload', 'topics', 'settings', 'review'];
+const initialState: WizardState = {
+  step: 'course',
+  courseId: null,
+  courseName: null,
+  syllabusId: null,
+  syllabus: null,
+  selectedTopicIds: [],
+  quizSettings: {
+    courseId: '',
+    syllabusId: '',
+    studentId: '',
+    selectedTopicIds: [],
+    questionCount: 10,
+    questionTypes: ['mcq', 'true_false', 'short_answer'],
+    difficulty: 'mixed',
+  },
+  error: null,
+  isUploading: false,
+  isGenerating: false,
+};
+
+type Course = { id: string; code: string; name: string }; 
+
+export default function NewQuizPage() {
+  const router = useRouter();
+  const user = useAuthStore((state) => state.user);
+  const [state, setState] = useState<WizardState>(initialState);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [courseLoading, setCourseLoading] = useState(true);
+  const [courseError, setCourseError] = useState('');
+  const [topicIds, setTopicIds] = useState<Record<string, string>>({});
+  const [linkedTopicLoading, setLinkedTopicLoading] = useState(false);
+  const [linkedTopicError, setLinkedTopicError] = useState('');
+
+  // A study-plan link names a persisted syllabus topic. Restore its owned
+  // syllabus and select exactly that topic, without requiring a new upload.
+  useEffect(() => {
+    const topicId = new URLSearchParams(window.location.search).get('topicId');
+    if (!topicId) return;
+    let active = true;
+    setLinkedTopicLoading(true);
+    setLinkedTopicError('');
+    fetch(`/api/student/syllabus/topic/${encodeURIComponent(topicId)}`, { cache: 'no-store' })
+      .then(async (response) => {
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || 'Unable to open this syllabus topic.');
+        if (!active) return;
+        setTopicIds(data.topicIds);
+        setState((current) => ({
+          ...current,
+          step: 'topics',
+          courseId: data.courseId,
+          courseName: data.courseName,
+          syllabusId: data.syllabusId,
+          syllabus: data.parsed,
+          selectedTopicIds: [topicId],
+          error: null,
+        }));
+      })
+      .catch((error) => {
+        if (active) setLinkedTopicError(error instanceof Error ? error.message : 'Unable to open this syllabus topic.');
+      })
+      .finally(() => { if (active) setLinkedTopicLoading(false); });
+    return () => { active = false; };
+  }, []);
+  useEffect(() => {
+    let active = true;
+    fetch('/api/student/enrolled-courses').then(async (response) => {
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Unable to load courses.');
+      if (active) setCourses(data.courses || []);
+    }).catch((error) => { if (active) setCourseError(error instanceof Error ? error.message : 'Unable to load courses.'); })
+      .finally(() => { if (active) setCourseLoading(false); });
+    return () => { active = false; };
+  }, []);
+  const [notice, setNotice] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
+  const currentIndex = steps.indexOf(state.step);
+  const selectedTopicCount = state.selectedTopicIds.length;
+
+  const completedSteps = useMemo(() => steps.slice(0, Math.max(currentIndex, 0)), [currentIndex]);
+
+  const canContinue = state.step === 'course'
+    ? Boolean(state.courseId)
+    : state.step === 'upload'
+      ? Boolean(state.syllabusId && state.syllabus)
+      : state.step === 'topics'
+        ? SyllabusTopicSelectionSchema.safeParse({ selectedTopicIds: state.selectedTopicIds, courseId: state.courseId, syllabusId: state.syllabusId }).success
+        : state.step === 'settings'
+          ? state.quizSettings.questionTypes.length > 0
+          : true;
+
+  const updateQuizSettings = (quizSettings: WizardState['quizSettings']) => {
+    setState((current) => ({ ...current, quizSettings }));
+  };
+
+  const generateQuiz = async () => {
+    const request = QuizGenerationRequestSchema.safeParse({
+      ...state.quizSettings,
+      courseId: state.courseId,
+      syllabusId: state.syllabusId,
+      studentId: user?.studentId || user?.id,
+      selectedTopicIds: state.selectedTopicIds,
+    });
+    if (!request.success) {
+      setNotice({ kind: 'error', text: request.error.issues[0]?.message ?? 'Review your quiz settings.' });
+      return;
+    }
+    setState((current) => ({ ...current, isGenerating: true }));
+    setNotice(null);
+    try {
+      const response = await fetch('/api/student/quiz-generation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request.data),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.message || body.error || 'Quiz generation failed.');
+      if (typeof body.quizId !== 'string') throw new Error('The quiz response was invalid.');
+      router.push(`/student/quizzes/${encodeURIComponent(body.quizId)}`);
+    } catch (error) {
+      setNotice({ kind: 'error', text: error instanceof Error ? error.message : 'Quiz generation failed.' });
+    } finally {
+      setState((current) => ({ ...current, isGenerating: false }));
+    }
+  };
+
+  const next = () => {
+    if (!canContinue || currentIndex < 0 || currentIndex >= steps.length - 1) return;
+    setState((current) => ({ ...current, step: steps[currentIndex + 1], error: null }));
+  };
+  const back = () => {
+    if (currentIndex <= 0) return;
+    setState((current) => ({ ...current, step: steps[currentIndex - 1], error: null }));
+  };
+
+  return (
+    <div className="mx-auto max-w-4xl space-y-6">
+      <header className="space-y-2">
+        <span className="font-mono text-xs font-medium uppercase tracking-widest text-terracotta">02 / QUIZ BUILDER</span>
+        <h1 className="page-title font-fraunces text-4xl font-normal italic">Create a syllabus quiz</h1>
+        <p className="page-subtitle text-sm">Choose course topics and configure a focused practice quiz.</p>
+      </header>
+      <HairlineRule variant="olive" />
+      {linkedTopicLoading && <p role="status" className="text-sm text-ink-2">Loading your recommended syllabus topic…</p>}
+      {linkedTopicError && <p role="alert" className="text-sm text-burgundy">{linkedTopicError} You can still create a new quiz below.</p>}
+      <WizardStepper currentStep={state.step} completedSteps={completedSteps} />
+      <Panel title={steps[currentIndex] === 'course' ? 'Choose a course' : steps[currentIndex] === 'upload' ? 'Upload your syllabus' : steps[currentIndex] === 'topics' ? 'Select topics' : state.step === 'settings' ? 'Configure your quiz' : 'Review quiz'}>
+        {state.step === 'course' ? (
+          <div className="space-y-3">
+            {courseLoading ? <p role="status">Loading enrolled courses…</p> : courseError ? <p role="alert" className="text-burgundy">{courseError}</p> : courses.length === 0 ? <p role="status">No courses yet. Ask your faculty to enroll you in a course before creating a quiz.</p> : (
+              <label className="block text-sm">Enrolled course
+                <select aria-label="Enrolled course" className="mt-2 w-full rounded border border-paper-3 bg-paper-0 p-3" value={state.courseId ?? ''} onChange={(event) => {
+                  const course = courses.find((item) => item.id === event.target.value);
+                  setState((current) => ({ ...current, courseId: course?.id || null, courseName: course?.name || null, syllabus: null, syllabusId: null, selectedTopicIds: [] }));
+                  setTopicIds({});
+                }}><option value="">Choose a course</option>{courses.map((course) => <option key={course.id} value={course.id}>{course.code} — {course.name}</option>)}</select>
+              </label>
+            )}
+          </div>
+        ) : state.step === 'upload' ? (
+          <SyllabusUploader
+            courseId={state.courseId!}
+            isUploading={state.isUploading}
+            onUploadStart={() => setState((current) => ({ ...current, isUploading: true, error: null }))}
+            onUploadSuccess={(syllabusId, syllabus, ids) => { setTopicIds(ids); setState((current) => ({ ...current, syllabusId, syllabus, selectedTopicIds: [], isUploading: false, error: null })); }}
+            onUploadError={(error) => setState((current) => ({ ...current, isUploading: false, error }))}
+          />
+        ) : state.step === 'topics' ? (
+          <ModuleTopicSelector
+            syllabus={state.syllabus}
+            topicIds={topicIds}
+            selectedTopicIds={state.selectedTopicIds}
+            onChange={(selectedTopicIds) => setState((current) => ({ ...current, selectedTopicIds }))}
+            isLoading={state.isUploading}
+          />
+        ) : state.step === 'settings' ? (
+          <div className="space-y-5">
+            <QuizSettingsPanel settings={state.quizSettings} onChange={updateQuizSettings} selectedTopicCount={selectedTopicCount} />
+            <p className="text-xs text-ink-2">{selectedTopicCount} topic{selectedTopicCount === 1 ? '' : 's'} selected</p>
+          </div>
+        ) : (
+          <section className="space-y-4" aria-label="Review quiz details">
+            <p><strong>Course:</strong> {state.courseName}</p>
+            <p><strong>Selected topics:</strong> {selectedTopicCount}</p>
+            <p><strong>Questions:</strong> {state.quizSettings.questionCount}</p>
+            <p><strong>Difficulty:</strong> {state.quizSettings.difficulty}</p>
+            <p><strong>Types:</strong> {state.quizSettings.questionTypes.join(', ')}</p>
+            {notice && <NoticeBox notice={notice} />}
+            <Button onClick={generateQuiz} disabled={state.isGenerating || selectedTopicCount === 0 || state.quizSettings.questionTypes.length === 0}>{state.isGenerating ? 'Generating…' : 'Generate Quiz'}</Button>
+          </section>
+        )}
+      </Panel>
+      {state.error && state.step !== 'settings' && <NoticeBox notice={{ kind: 'error', text: state.error }} />}
+      <div className="flex justify-between">
+        <Button variant="ghost" onClick={back} disabled={linkedTopicLoading || currentIndex <= 0 || state.isUploading || state.isGenerating}>Back</Button>
+        {currentIndex < steps.length - 1 && (
+          <Button onClick={next} disabled={linkedTopicLoading || !canContinue || state.isUploading || state.isGenerating}>Next</Button>
+        )}
+      </div>
+    </div>
+  );
+}

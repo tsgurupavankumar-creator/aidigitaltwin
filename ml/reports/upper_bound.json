@@ -1,0 +1,85 @@
+{
+  "purpose": "research only: what richer data (not collected by the app) would add; no model here is used by the app",
+  "extra_inputs": [
+    "prevAttempts",
+    "studiedCredits",
+    "registeredDaysBefore",
+    "clicksBefore",
+    "activeDaysBefore",
+    "clicks_oucontent",
+    "clicks_forumng",
+    "clicks_quiz",
+    "clicks_resource",
+    "clicks_subpage",
+    "clicks_homepage",
+    "clicks_url"
+  ],
+  "excluded_on_purpose": [
+    "gender",
+    "age_band",
+    "disability",
+    "region",
+    "imd_band",
+    "highest_education"
+  ],
+  "same_settings_as_deployed": {
+    "marks": {
+      "max_depth": 6,
+      "learning_rate": 0.05,
+      "n_estimators": 400,
+      "objective": "reg:absoluteerror"
+    },
+    "early_warning": {
+      "max_depth": 3,
+      "learning_rate": 0.05,
+      "n_estimators": 300
+    }
+  },
+  "marks": {
+    "splits": [
+      {
+        "split": "main",
+        "deployed_inputs": {
+          "mae": 9.098045480291903,
+          "r2": 0.47362246341770986
+        },
+        "with_richer_data": {
+          "mae": 9.046976543604348,
+          "r2": 0.4716219195869038
+        }
+      }
+    ],
+    "average": {
+      "deployed_inputs": {
+        "mae": 9.098045480291903,
+        "r2": 0.47362246341770986
+      },
+      "with_richer_data": {
+        "mae": 9.046976543604348,
+        "r2": 0.4716219195869038
+      }
+    }
+  },
+  "early_warning": {
+    "splits": [
+      {
+        "split": "main",
+        "deployed_inputs": {
+          "auc": 0.8008413577754142
+        },
+        "with_richer_data": {
+          "auc": 0.8062923380560469
+        }
+      }
+    ],
+    "average": {
+      "deployed_inputs": {
+        "auc": 0.8008413577754142
+      },
+      "with_richer_data": {
+        "auc": 0.8062923380560469
+      }
+    }
+  },
+  "summary": "Marks MAE 9.10 -> 9.05, R\u00b2 0.474 -> 0.472; early-warning AUC 0.801 -> 0.806 (average over 1 splits)"
+}

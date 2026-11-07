@@ -1,0 +1,11 @@
+import { test } from 'node:test';
+import { strict as assert } from 'node:assert';
+import { progression, prerequisiteScore } from '../src/lib/practice/progression';
+const scores = (beginner: number, intermediate = 0, advanced = 0) => ({ BEGINNER: beginner, INTERMEDIATE: intermediate, ADVANCED: advanced });
+test('new learners start at Beginner', () => assert.equal(progression(scores(0)).recommendation, 'BEGINNER'));
+test('0.69 does not unlock Intermediate', () => assert.deepEqual(progression(scores(.69)).unlockedTiers, ['BEGINNER']));
+test('exactly 0.70 unlocks Intermediate', () => assert.deepEqual(progression(scores(.70)).unlockedTiers, ['BEGINNER', 'INTERMEDIATE']));
+test('Advanced requires both prior tiers', () => assert.deepEqual(progression(scores(.71, .71)).unlockedTiers, ['BEGINNER', 'INTERMEDIATE', 'ADVANCED']));
+test('all tiers at 70% counts as mastered', () => assert.equal(progression(scores(.7,.7,.7)).isMastered, true));
+test('prerequisite checks highest attempted tier', () => assert.equal(prerequisiteScore(scores(.95,.4), { BEGINNER: 5, INTERMEDIATE: 3, ADVANCED: 0 }), .4));
+test('prerequisite has no mastery before first attempt', () => assert.equal(prerequisiteScore(scores(.95), { BEGINNER: 0, INTERMEDIATE: 0, ADVANCED: 0 }), 0));

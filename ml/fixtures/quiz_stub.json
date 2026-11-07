@@ -1,0 +1,124 @@
+{
+  "questions": [
+    {
+      "prompt": "Sample question 1: identify the key principle of module 1.",
+      "explanation": "Shared integration-test fixture, not AI output.",
+      "syllabusTopicId": "placeholder-topic-00",
+      "conceptId": null,
+      "difficulty": "easy",
+      "type": "mcq",
+      "options": [
+        "Correct principle",
+        "Unrelated principle",
+        "No principle"
+      ],
+      "correctAnswer": "Correct principle"
+    },
+    {
+      "prompt": "Sample question 2: identify the key principle of module 2.",
+      "explanation": "Shared integration-test fixture, not AI output.",
+      "syllabusTopicId": "placeholder-topic-01",
+      "conceptId": null,
+      "difficulty": "easy",
+      "type": "mcq",
+      "options": [
+        "Correct principle",
+        "Unrelated principle",
+        "No principle"
+      ],
+      "correctAnswer": "Correct principle"
+    },
+    {
+      "prompt": "Sample question 3: identify the key principle of module 3.",
+      "explanation": "Shared integration-test fixture, not AI output.",
+      "syllabusTopicId": "placeholder-topic-02",
+      "conceptId": null,
+      "difficulty": "easy",
+      "type": "mcq",
+      "options": [
+        "Correct principle",
+        "Unrelated principle",
+        "No principle"
+      ],
+      "correctAnswer": "Correct principle"
+    },
+    {
+      "prompt": "Sample question 4: identify the key principle of module 4.",
+      "explanation": "Shared integration-test fixture, not AI output.",
+      "syllabusTopicId": "placeholder-topic-03",
+      "conceptId": null,
+      "difficulty": "easy",
+      "type": "mcq",
+      "options": [
+        "Correct principle",
+        "Unrelated principle",
+        "No principle"
+      ],
+      "correctAnswer": "Correct principle"
+    },
+    {
+      "prompt": "Sample question 5: identify the key principle of module 5.",
+      "explanation": "Shared integration-test fixture, not AI output.",
+      "syllabusTopicId": "placeholder-topic-04",
+      "conceptId": null,
+      "difficulty": "medium",
+      "type": "mcq",
+      "options": [
+        "Correct principle",
+        "Unrelated principle",
+        "No principle"
+      ],
+      "correctAnswer": "Correct principle"
+    },
+    {
+      "prompt": "Sample question 6: identify the key principle of module 1.",
+      "explanation": "Shared integration-test fixture, not AI output.",
+      "syllabusTopicId": "placeholder-topic-05",
+      "conceptId": null,
+      "difficulty": "medium",
+      "type": "mcq",
+      "options": [
+        "Correct principle",
+        "Unrelated principle",
+        "No principle"
+      ],
+      "correctAnswer": "Correct principle"
+    },
+    {
+      "prompt": "Sample question 7: identify the key principle of module 2.",
+      "explanation": "Shared integration-test fixture, not AI output.",
+      "syllabusTopicId": "placeholder-topic-06",
+      "conceptId": null,
+      "difficulty": "medium",
+      "type": "true_false",
+      "correctAnswer": "true"
+    },
+    {
+      "prompt": "Sample question 8: identify the key principle of module 3.",
+      "explanation": "Shared integration-test fixture, not AI output.",
+      "syllabusTopicId": "placeholder-topic-07",
+      "conceptId": null,
+      "difficulty": "medium",
+      "type": "true_false",
+      "correctAnswer": "true"
+    },
+    {
+      "prompt": "Sample question 9: identify the key principle of module 4.",
+      "explanation": "Shared integration-test fixture, not AI output.",
+      "syllabusTopicId": "placeholder-topic-08",
+      "conceptId": null,
+      "difficulty": "hard",
+      "type": "short_answer",
+      "correctAnswer": "Example definition"
+    },
+    {
+      "prompt": "Sample question 10: identify the key principle of module 5.",
+      "explanation": "Shared integration-test fixture, not AI output.",
+      "syllabusTopicId": "placeholder-topic-09",
+      "conceptId": null,
+      "difficulty": "hard",
+      "type": "short_answer",
+      "correctAnswer": "Example definition"
+    }
+  ]
+}

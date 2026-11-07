@@ -1,0 +1,122 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { requireRole } from '@/lib/api-auth';
+import { prisma } from '@/lib/prisma';
+import { SyllabusParseResultSchema, SyllabusUploadRequestSchema } from '@/lib/validation/syllabus';
+
+export const runtime = 'nodejs';
+const LIMIT = 10 * 1024 * 1024;
+
+export async function POST(request: NextRequest) {
+  const auth = await requireRole('student');
+  if ('error' in auth) return auth.error;
+  const studentId = auth.user.student!.id;
+  const fail = async (code: string, message: string, status: number) => {
+    try {
+      await prisma.agentLog.create({ data: {
+        studentId, agentType: 'QUIZ', status: 'FAILED',
+        input: { action: 'syllabus_upload', code }, output: { message }, triggeredBy: 'student',
+      } });
+    } catch (error) { console.error('[SYLLABUS_AUDIT_FAILED]', error); }
+    return NextResponse.json({ error: code, message }, { status });
+  };
+  const declaredSize = Number(request.headers.get('content-length'));
+  if (declaredSize > LIMIT + 1024 * 1024) return fail('TOO_LARGE', 'PDF must be 10 MB or smaller.', 413);
+  let form: FormData;
+  try { form = await request.formData(); }
+  catch { return fail('INVALID_FORM', 'Unable to read the uploaded PDF.', 400); }
+  const file = form.get('file');
+  const courseId = form.get('courseId');
+  if (!(file instanceof File) || typeof courseId !== 'string') return fail('INVALID_FILE', 'Choose a PDF and a course.', 400);
+  const metadata = SyllabusUploadRequestSchema.safeParse({ originalFileName: file.name, mimeType: file.type, fileSizeBytes: file.size });
+  if (!metadata.success) return fail('INVALID_FILE', metadata.error.issues[0]?.message ?? 'Invalid PDF.', 400);
+  if (file.size > LIMIT) return fail('TOO_LARGE', 'PDF must be 10 MB or smaller.', 413);
+  const enrolled = await prisma.enrollment.findUnique({ where: { studentId_courseId: { studentId, courseId } } });
+  if (!enrolled) return fail('FORBIDDEN_COURSE', 'You are not enrolled in this course.', 403);
+  const bytes = Buffer.from(await file.arrayBuffer());
+  if (bytes.subarray(0, 5).toString() !== '%PDF-') return fail('INVALID_PDF', 'The uploaded file is not a valid PDF.', 400);
+  if (bytes.includes(Buffer.from('/Encrypt'))) return fail('ENCRYPTED_PDF', 'Password-protected PDFs are not supported.', 422);
+  if (bytes.length < 100) return fail('EMPTY_PDF', 'This PDF is empty or incomplete.', 422);
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 25000);
+  let parsed: ReturnType<typeof SyllabusParseResultSchema.parse>;
+  try {
+    const url = (process.env.ML_SERVICE_URL || 'http://127.0.0.1:8000').replace(/\/$/, '');
+    const response = await fetch(`${url}/syllabus/parse`, { method: 'POST', headers: { 'Content-Type': 'application/pdf' }, body: new Blob([new Uint8Array(bytes)], { type: 'application/pdf' }), signal: controller.signal, cache: 'no-store' });
+    if (!response.ok) return fail(response.status === 422 ? 'PARSE_FAILED' : 'PARSER_UNAVAILABLE', response.status === 422 ? 'The PDF could not be parsed. Check that it contains readable text.' : 'Syllabus parser is unavailable. Please try again.', response.status === 422 ? 422 : 503);
+    const payload: unknown = await response.json();
+    if (!payload || typeof payload !== 'object') return fail('INVALID_PARSER_OUTPUT', 'The parser returned an invalid response.', 502);
+    const envelope = payload as { degraded?: unknown; error?: unknown; parsed?: unknown };
+    if (envelope.degraded === true) {
+      return fail('PARSE_FAILED', typeof envelope.error === 'string' ? envelope.error : 'The PDF could not be parsed.', 422);
+    }
+    const result = SyllabusParseResultSchema.safeParse(envelope.parsed);
+    if (!result.success) return fail('INVALID_PARSER_OUTPUT', 'The parser returned an invalid syllabus structure.', 502);
+    parsed = result.data;
+  } catch (error) {
+    return fail(error instanceof Error && error.name === 'AbortError' ? 'PARSER_TIMEOUT' : 'PARSER_UNAVAILABLE', error instanceof Error && error.name === 'AbortError' ? 'Parsing timed out. Please retry.' : 'Syllabus parser is unavailable. Please retry later.', 503);
+  } finally { clearTimeout(timeout); }
+
+  
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const last = await tx.courseSyllabus.findFirst({
+        where: { studentId, courseId },
+        orderBy: { version: 'desc' },
+        select: { version: true }
+      });
+
+      const syllabus = await tx.courseSyllabus.create({
+        data: {
+          studentId,
+          courseId,
+          version: (last?.version ?? 0) + 1,
+          originalFileName: file.name,
+          mimeType: file.type,
+          fileSizeBytes: file.size,
+          parseStatus: 'COMPLETED'
+        }
+      });
+
+      const topicIds: Record<string, string> = {};
+
+      for (const module of parsed.modules) {
+        const createdModule = await tx.syllabusModule.create({
+          data: {
+            syllabusId: syllabus.id,
+            name: module.name,
+            description: module.description,
+            orderIndex: module.orderIndex
+          }
+        });
+
+        for (const topic of module.topics) {
+          const created = await tx.syllabusTopic.create({
+            data: {
+              moduleId: createdModule.id,
+              name: topic.name,
+              description: topic.description,
+              orderIndex: topic.orderIndex
+            }
+          });
+
+          topicIds[`${module.orderIndex}:${topic.orderIndex}`] = created.id;
+        }
+      }
+
+      return { syllabusId: syllabus.id, parsed, topicIds };
+    }, {
+      maxWait: 10000,
+      timeout: 60000
+    });
+
+    return NextResponse.json(result, { status: 201 });
+  } catch (error) {
+    console.error('[SYLLABUS_PERSIST_FAILED]', error);
+    return fail(
+      'SAVE_FAILED',
+      'The parsed syllabus could not be saved. Please retry.',
+      500
+    );
+  }
+}

@@ -1,0 +1,70 @@
+{
+  "rows": {
+    "fit": 14925,
+    "validation": 7857,
+    "test": 3793
+  },
+  "with_learning_signal_test": 0.9153704191932507,
+  "hand_set": {
+    "auc": 0.7814207386088944,
+    "levels": {
+      "LOW": {
+        "n": 676,
+        "observed_fail_or_withdraw_rate": 0.15088757396449703
+      },
+      "MEDIUM": {
+        "n": 1802,
+        "observed_fail_or_withdraw_rate": 0.30799112097669257
+      },
+      "HIGH": {
+        "n": 891,
+        "observed_fail_or_withdraw_rate": 0.6262626262626263
+      },
+      "CRITICAL": {
+        "n": 424,
+        "observed_fail_or_withdraw_rate": 0.9386792452830188
+      }
+    },
+    "cutoffs": {
+      "MEDIUM": 25,
+      "HIGH": 45,
+      "CRITICAL": 70
+    }
+  },
+  "data_driven": {
+    "auc": 0.7999849275098541,
+    "levels": {
+      "LOW": {
+        "n": 1321,
+        "observed_fail_or_withdraw_rate": 0.1680545041635125
+      },
+      "MEDIUM": {
+        "n": 888,
+        "observed_fail_or_withdraw_rate": 0.3524774774774775
+      },
+      "HIGH": {
+        "n": 901,
+        "observed_fail_or_withdraw_rate": 0.5172031076581576
+      },
+      "CRITICAL": {
+        "n": 683,
+        "observed_fail_or_withdraw_rate": 0.8960468521229868
+      }
+    },
+    "cutoffs": {
+      "MEDIUM": 28.1,
+      "HIGH": 46.4,
+      "CRITICAL": 71.9
+    },
+    "attendance_vs_learning_weight": 0.75,
+    "validation_auc": 0.8096072057674236
+  },
+  "early_warning_alone_auc": 0.7990622351649728,
+  "target_rates": {
+    "MEDIUM": 0.25,
+    "HIGH": 0.5,
+    "CRITICAL": 0.75
+  },
+  "knowledge_part": "not testable on OULAD (no concept data); keeps hand-set weight 0.35",
+  "verdict": "data-driven score AUC 0.800 vs hand-set 0.781 (+0.019); levels now map to observed fail-or-withdraw rates on unseen presentations"
+}

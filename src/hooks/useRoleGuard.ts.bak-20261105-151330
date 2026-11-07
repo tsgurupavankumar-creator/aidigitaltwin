@@ -1,0 +1,85 @@
+
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useRouter, usePathname } from 'next/navigation';
+import { useAuthStore } from '@/store/authStore';
+import { NormalizedRole, normalizeRole } from '@/lib/auth/roles';
+
+export function useRoleGuard(expectedRole: NormalizedRole) {
+  const router = useRouter();
+  const pathname = usePathname();
+
+  const { user, role, isLoading, isAuthenticated, refreshSession } =
+    useAuthStore();
+
+  const [sessionChecked, setSessionChecked] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+
+    setSessionChecked(false);
+
+    async function checkSession() {
+      try {
+        await refreshSession();
+      } finally {
+        if (active) {
+          setSessionChecked(true);
+        }
+      }
+    }
+
+    void checkSession();
+
+    return () => {
+      active = false;
+    };
+  }, [refreshSession]);
+
+  useEffect(() => {
+    if (!sessionChecked || isLoading) return;
+
+    if (!isAuthenticated || !role) {
+      router.replace(
+        `/login?role=${expectedRole}&redirect=${encodeURIComponent(pathname)}`
+      );
+      return;
+    }
+
+    const normalizedRole = normalizeRole(role);
+    const normalizedExpected = normalizeRole(expectedRole);
+
+    if (normalizedRole !== normalizedExpected) {
+      console.warn(
+        `[CLIENT GUARD] Role mismatch (${role} vs expected ${expectedRole}). Redirecting...`
+      );
+
+      router.replace(
+        normalizedRole === 'faculty' ? '/faculty' : '/student'
+      );
+    }
+  }, [
+    sessionChecked,
+    isLoading,
+    isAuthenticated,
+    role,
+    expectedRole,
+    router,
+    pathname,
+  ]);
+
+  const normalizedRole = normalizeRole(role);
+  const normalizedExpected = normalizeRole(expectedRole);
+
+  return {
+    isAllowed:
+      sessionChecked &&
+      !isLoading &&
+      isAuthenticated &&
+      normalizedRole === normalizedExpected,
+    isLoading: !sessionChecked || isLoading,
+    user,
+    role,
+  };
+}
